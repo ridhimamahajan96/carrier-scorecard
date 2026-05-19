@@ -20,7 +20,16 @@ def has_numeric(value):
 def score_completion_numeric(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
-    if has_numeric(value):
+    v = str(value).lower().strip()
+    if v in ['not applicable', 'n/a', 'na', 'nil', '-']:
+        return 0, "Not Applicable - no emissions attributed"
+    if v in ['0', '0%', '0.0', '0.00', '0.0%']:
+        return 0, "Zero emissions reported - 0 pts"
+    nums = re.findall(r'[\d.]+', v)
+    if nums:
+        num_val = float(nums[0])
+        if num_val == 0:
+            return 0, "Zero emissions reported - 0 pts"
         return 5, f"Numeric response: {value}"
     return 0, "No numeric value found"
 
