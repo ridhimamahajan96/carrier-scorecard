@@ -21,484 +21,352 @@ def score_completion_numeric(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
     if has_numeric(value):
-        return 5, f"Numeric response provided: {value}"
+        return 5, f"Numeric response: {value}"
     return 0, "No numeric value found"
 
 def score_completion_text(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
-    return 5, f"Response provided: {str(value)[:100]}..."
+    return 5, f"Response: {str(value)[:100]}"
 
 def score_url_provided(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
-    return 2, f"Documentation provided: {str(value)[:100]}..."
+    return 2, f"Documentation: {str(value)[:100]}"
 
 def score_tab3_q4(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
-    value_lower = str(value).lower()
-    recognized = ['ghg protocol', 'sbti', 'glec', 'iso 14083', 'ecotransit']
-    if any(fw in value_lower for fw in recognized):
-        return 5, f"Recognized framework selected: {value}"
-    elif 'internal' in value_lower and 'not sure' not in value_lower and 'none' not in value_lower:
-        return 2, "Only Internal Framework selected"
-    elif 'not sure' in value_lower or 'none' in value_lower:
+    v = str(value).lower()
+    if any(fw in v for fw in ['ghg protocol', 'sbti', 'glec', 'iso 14083', 'ecotransit']):
+        return 5, f"Recognized framework: {value}"
+    elif 'internal' in v and 'not sure' not in v and 'none' not in v:
+        return 2, "Only Internal Framework"
+    elif 'not sure' in v or 'none' in v:
         return 1, "Not sure/None selected"
-    return 0, "No valid framework identified"
+    return 0, "No valid framework"
 
 def score_tab3_q6(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
-    value_lower = str(value).lower()
-    valid_options = ['ttw', 'wtw', 'wtt']
-    has_valid = any(opt in value_lower for opt in valid_options)
-    has_wtw = 'wtw' in value_lower or 'well to wheel' in value_lower
-    only_not_sure = 'not sure' in value_lower and not has_valid
-    if only_not_sure:
+    v = str(value).lower()
+    has_valid = any(opt in v for opt in ['ttw', 'wtw', 'wtt'])
+    has_wtw = 'wtw' in v
+    if 'not sure' in v and not has_valid:
         return 1, "Only Not sure selected"
     elif has_valid:
-        base_score = 5
-        bonus = 2 if has_wtw else 0
-        total = base_score + bonus
-        justification = f"Valid boundary selected: {value}"
-        if has_wtw:
-            justification += " (includes WTW +2 bonus)"
-        return total, justification
-    return 0, "No valid boundary selected"
+        score = 5 + (2 if has_wtw else 0)
+        return score, f"Valid boundary: {value}" + (" (+2 WTW bonus)" if has_wtw else "")
+    return 0, "No valid boundary"
 
 def score_tab3_q7(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
-    return 5, f"Response provided: {value}"
+    return 5, f"Response: {value}"
 
 def score_tab3_q8(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
-    value_lower = str(value).lower()
-    scope_count = 0
-    scopes_found = []
-    if 'scope 1' in value_lower or 'scope1' in value_lower:
-        scope_count += 1
-        scopes_found.append('Scope 1')
-    if 'scope 2' in value_lower or 'scope2' in value_lower:
-        scope_count += 1
-        scopes_found.append('Scope 2')
-    if 'scope 3' in value_lower or 'scope3' in value_lower:
-        scope_count += 1
-        scopes_found.append('Scope 3')
-    if scope_count == 3:
-        return 5, f"All 3 scopes selected"
-    elif scope_count == 2:
-        return 4, f"2 scopes selected"
-    elif scope_count == 1:
-        return 3, f"1 scope selected"
+    v = str(value).lower()
+    count = sum([1 for s in ['scope 1', 'scope 2', 'scope 3', 'scope1', 'scope2', 'scope3'] if s in v]) // 1
+    count = min(count, 3)
+    if 'scope 1' in v or 'scope1' in v:
+        count = 1
+    if 'scope 2' in v or 'scope2' in v:
+        count = max(count, 1) + (1 if count >= 1 else 0)
+    if 'scope 3' in v or 'scope3' in v:
+        count = max(count, 1) + (1 if count >= 1 else 0)
+    count = len([s for s in ['scope 1', 'scope 2', 'scope 3'] if s in v or s.replace(' ', '') in v])
+    if count == 3:
+        return 5, "All 3 scopes"
+    elif count == 2:
+        return 4, "2 scopes"
+    elif count == 1:
+        return 3, "1 scope"
     return 0, "No scopes identified"
 
 def score_tab4_q1(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
-    value_lower = str(value).lower()
-    if 'yes' in value_lower and 'no' not in value_lower:
+    v = str(value).lower()
+    if v == 'yes' or (v.startswith('yes') and 'no' not in v):
         return 5, "Yes - has carbon neutrality goal"
-    elif 'development' in value_lower or 'in progress' in value_lower:
+    elif 'development' in v or 'in progress' in v:
         return 2, "In development"
-    elif 'no' in value_lower:
+    elif v == 'no' or v.startswith('no'):
         return 1, "No carbon neutrality goal"
-    return 0, f"Unrecognized response: {value}"
+    return 0, f"Unrecognized: {value}"
 
 def score_tab4_q2(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
-    value_str = str(value)
-    if '2030' in value_str and '2031' not in value_str:
-        return 5, "Target year: 2030"
-    elif any(str(y) in value_str for y in range(2031, 2041)):
-        return 4, f"Target year: 2031-2040"
-    elif any(str(y) in value_str for y in range(2041, 2050)):
-        return 3, f"Target year: 2041-2050"
-    elif '2050' in value_str and 'beyond' not in value_str.lower():
-        return 2, "Target year: 2050"
-    elif 'beyond' in value_str.lower():
-        return 1, f"Target year: Beyond 2050"
-    return 0, f"Could not determine target year"
+    v = str(value)
+    if '2030' in v and '2031' not in v:
+        return 5, "Target: 2030"
+    elif any(str(y) in v for y in range(2031, 2041)) or '2031-2040' in v:
+        return 4, "Target: 2031-2040"
+    elif any(str(y) in v for y in range(2041, 2050)) or '2041-2050' in v:
+        return 3, "Target: 2041-2050"
+    elif '2050' in v and 'beyond' not in v.lower():
+        return 2, "Target: 2050"
+    elif 'beyond' in v.lower():
+        return 1, "Target: Beyond 2050"
+    return 0, "Could not determine target year"
 
 def score_tab4_q3(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
-    value_lower = str(value).lower()
-    if 'not sure' in value_lower:
+    if 'not sure' in str(value).lower():
         return 0, "Not sure selected"
-    return 5, f"Reduction target provided: {value}"
+    return 5, f"Reduction target: {value}"
 
 def score_tab4_q4(value, q3_value=None, **kwargs):
-    if q3_value is None:
-        return 0, "Q3 value not available"
-    q3_lower = str(q3_value).lower() if q3_value else ''
-    if 'not sure' not in q3_lower:
+    if q3_value is None or 'not sure' not in str(q3_value).lower():
         return 0, "N/A - Q3 was not Not sure"
     if is_blank(value):
-        return 0, "Q3 was Not sure but no estimate provided"
+        return 0, "No estimate provided"
     if has_numeric(value):
-        return 3, f"Estimate provided: {value}"
-    return 0, "No numeric estimate found"
+        return 3, f"Estimate: {value}"
+    return 0, "No numeric estimate"
 
 def score_tab4_q5a(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
-    value_str = str(value).lower()
-    numbers = re.findall(r'(\d+)', value_str)
-    if numbers:
-        max_num = max(int(n) for n in numbers)
-        if max_num == 0:
-            return 0, "0% reduction"
-        elif max_num <= 10:
-            return 1, f"{max_num}% reduction (1-10% range)"
-        elif max_num <= 20:
-            return 2, f"{max_num}% reduction (11-20% range)"
-        elif max_num <= 40:
-            return 3, f"{max_num}% reduction (21-40% range)"
-        elif max_num <= 50:
-            return 4, f"{max_num}% reduction (41-50% range)"
-        else:
-            return 5, f"{max_num}% reduction (51%+ range)"
-    return 0, f"Could not determine reduction"
+    v = str(value).lower()
+    nums = re.findall(r'(\d+)', v)
+    if nums:
+        n = max(int(x) for x in nums)
+        if n == 0: return 0, "0% reduction"
+        elif n <= 10: return 1, f"{n}% (1-10%)"
+        elif n <= 20: return 2, f"{n}% (11-20%)"
+        elif n <= 40: return 3, f"{n}% (21-40%)"
+        elif n <= 50: return 4, f"{n}% (41-50%)"
+        else: return 5, f"{n}% (51%+)"
+    return 0, "Could not determine %"
 
-def score_tab4_q6(value, fy2030_value=None, **kwargs):
+def score_tab4_q6(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
-    value_str = str(value)
-    years_mentioned = sum(1 for year in ['2026', '2027', '2028', '2029', '2030'] if year in value_str)
-    if years_mentioned >= 4:
-        return 5, "Comprehensive ramp plan provided"
-    elif years_mentioned >= 1:
-        return 2, f"Partial ramp plan ({years_mentioned} years mentioned)"
-    return 0, "No clear ramp plan identified"
+    v = str(value)
+    years = sum(1 for y in ['2026', '2027', '2028', '2029', '2030'] if y in v)
+    if years >= 4:
+        return 5, "Comprehensive ramp plan"
+    elif years >= 1:
+        return 2, f"Partial plan ({years} years)"
+    return 0, "No ramp plan identified"
 
 def score_tab5_q1(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
-    value_lower = str(value).lower()
-    if 'yes' in value_lower:
-        return 5, "Yes - carbon credits part of strategy"
-    elif 'development' in value_lower:
+    v = str(value).lower()
+    if v == 'yes' or v.startswith('yes'):
+        return 5, "Yes - carbon credits in strategy"
+    elif 'development' in v:
         return 3, "In development"
-    elif 'no' in value_lower:
-        return 2, "No - carbon credits not part of strategy"
-    return 0, f"Unrecognized response: {value}"
+    elif v == 'no' or v.startswith('no'):
+        return 2, "No carbon credits"
+    return 0, f"Unrecognized: {value}"
 
 def score_tab5_q2(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
-    value_lower = str(value).lower()
+    v = str(value).lower()
     recognized = ['nature-based', 'nature based', 'voluntary', 'regulatory', 'compliance']
-    has_recognized = any(r in value_lower for r in recognized)
-    only_others = 'other' in value_lower and not has_recognized
-    if has_recognized:
-        return 5, f"Recognized instruments selected: {value}"
-    elif only_others:
-        return 2, "Only Others selected"
-    return 0, "No valid instruments identified"
+    if any(r in v for r in recognized):
+        return 5, f"Recognized: {value}"
+    elif 'other' in v:
+        return 2, "Only Others"
+    return 0, "No valid instruments"
 
 def score_conditional_text(value, depends_value=None, condition=None, **kwargs):
     if depends_value is None:
-        return 0, "Dependent question value not available"
-    depends_lower = str(depends_value).lower() if depends_value else ''
-    if condition and condition.lower() not in depends_lower:
+        return 0, "Dependent value not available"
+    if condition and condition.lower() not in str(depends_value).lower():
         return 0, f"N/A - {condition} not selected"
     if is_blank(value):
-        return 0, f"{condition} was selected but no explanation provided"
-    return 3, f"Explanation provided (needs manual review)"
+        return 0, "No explanation provided"
+    return 3, "Explanation provided (needs review)"
 
 def score_conditional_text_2pts(value, depends_value=None, condition=None, **kwargs):
     if depends_value is None:
-        return 0, "Dependent question value not available"
-    depends_lower = str(depends_value).lower() if depends_value else ''
-    if condition and condition.lower() not in depends_lower:
+        return 0, "Dependent value not available"
+    if condition and condition.lower() not in str(depends_value).lower():
         return 0, f"N/A - {condition} not selected"
     if is_blank(value):
-        return 0, f"{condition} was selected but no explanation provided"
-    return 2, f"Explanation provided (needs manual review)"
+        return 0, "No explanation provided"
+    return 2, "Explanation provided (needs review)"
 
 def score_tab6_q1(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
-    value_lower = str(value).lower()
-    has_saf = 'saf' in value_lower or 'sustainable aviation fuel' in value_lower
-    recognized_others = ['fleet modernisation', 'fleet modernization', 'route optimisation', 'route optimization', 'payload', 'load factor']
-    has_other_recognized = any(r in value_lower for r in recognized_others)
-    only_others = 'other' in value_lower and not has_saf and not has_other_recognized
-    if has_saf:
+    v = str(value).lower()
+    if 'saf' in v or 'sustainable aviation fuel' in v:
         return 5, f"SAF selected: {value}"
-    elif has_other_recognized:
-        return 3, f"Recognized strategy (non-SAF): {value}"
-    elif only_others:
-        return 1, "Only Others selected"
-    return 0, "No valid strategy identified"
+    elif any(r in v for r in ['fleet', 'route', 'payload', 'load factor']):
+        return 3, f"Recognized strategy: {value}"
+    elif 'other' in v:
+        return 1, "Only Others"
+    return 0, "No valid strategy"
 
 def score_tab7_q1(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
-    value_lower = str(value).lower()
-    recognized = ['alternative fuel', 'vessel efficiency', 'route optimisation', 'route optimization', 'slow steaming']
-    has_recognized = any(r in value_lower for r in recognized)
-    only_others = 'other' in value_lower and not has_recognized
-    if has_recognized:
-        return 5, f"Recognized strategy selected: {value}"
-    elif only_others:
-        return 1, "Only Others selected"
-    return 0, "No valid strategy identified"
+    v = str(value).lower()
+    if any(r in v for r in ['alternative fuel', 'vessel efficiency', 'route', 'slow steaming']):
+        return 5, f"Recognized: {value}"
+    elif 'other' in v:
+        return 1, "Only Others"
+    return 0, "No valid strategy"
 
 def score_tab7_q3(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
-    value_lower = str(value).lower()
-    recognized = ['lng', 'bio-lng', 'e-lng', 'methanol', 'bio-methanol', 'e-methanol', 'ammonia']
-    has_recognized = any(r in value_lower for r in recognized)
-    only_others = 'other' in value_lower and not has_recognized
-    if has_recognized:
-        return 5, f"Recognized fuel selected: {value}"
-    elif only_others:
-        return 1, "Only Others selected"
-    return 0, "No valid fuel identified"
+    v = str(value).lower()
+    if any(r in v for r in ['lng', 'methanol', 'ammonia']):
+        return 5, f"Recognized fuel: {value}"
+    elif 'other' in v:
+        return 1, "Only Others"
+    return 0, "No valid fuel"
 
 def score_tab8_q1(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
-    value_lower = str(value).lower()
-    recognized = ['electric', 'bev', 'hybrid', 'alternative fuel', 'biofuel', 'route optimisation', 'route optimization', 'load consolidation']
-    has_recognized = any(r in value_lower for r in recognized)
-    only_others = 'other' in value_lower and not has_recognized
-    if has_recognized:
-        return 5, f"Recognized strategy selected: {value}"
-    elif only_others:
-        return 1, "Only Others selected"
-    return 0, "No valid strategy identified"
+    v = str(value).lower()
+    if any(r in v for r in ['electric', 'bev', 'hybrid', 'alternative fuel', 'biofuel', 'route', 'load']):
+        return 5, f"Recognized: {value}"
+    elif 'other' in v:
+        return 1, "Only Others"
+    return 0, "No valid strategy"
 
 def score_tab8_q3(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
-    value_lower = str(value).lower()
-    recognized = ['biofuel', 'renewable diesel', 'rng', 'hvo', 'biodiesel', 'bio-cng', 'bio-lng', 'hydrogen', 'fuel cell']
-    has_recognized = any(r in value_lower for r in recognized)
-    only_others = 'other' in value_lower and not has_recognized
-    if has_recognized:
-        return 5, f"Recognized fuel selected: {value}"
-    elif only_others:
-        return 1, "Only Others selected"
-    return 0, "No valid fuel identified"
+    v = str(value).lower()
+    if any(r in v for r in ['biofuel', 'renewable diesel', 'rng', 'hvo', 'biodiesel', 'hydrogen', 'fuel cell']):
+        return 5, f"Recognized fuel: {value}"
+    elif 'other' in v:
+        return 1, "Only Others"
+    return 0, "No valid fuel"
 
 def get_scoring_rules():
-    rules = {
-        'tab3': {
-            'name': 'Emissions Baseline',
-            'section': 2,
-            'questions': {
-                'Q4': {'description': 'GHG reporting frameworks used', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab3_q4},
-                'Q6': {'description': 'Emissions reporting boundary', 'tier': 2, 'max_pts': 7, 'manual_review': False, 'score_func': score_tab3_q6},
-                'Q7': {'description': 'Unit for reporting emissions', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab3_q7},
-                'Q8': {'description': 'Scopes included in reporting', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab3_q8},
-                'Q9': {'description': 'Company total GHG emissions FY 2025', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_numeric},
-                'Q10': {'description': 'Company Scope 1 breakdown', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_numeric},
-                'Q11': {'description': 'Company Scope 2 breakdown', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_numeric},
-                'Q12': {'description': 'Company Scope 3 breakdown', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_numeric},
-                'Q13': {'description': 'Apple-specific total emissions FY 2025', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_numeric},
-                'Q14': {'description': 'Apple Scope 1', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_numeric},
-                'Q15': {'description': 'Apple Scope 2', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_numeric},
-                'Q16': {'description': 'Apple Scope 3', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_numeric},
-                'Q17': {'description': 'Methodology for Apple allocation', 'tier': 2, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_text},
-                'Q18': {'description': 'Documentation for methodology', 'tier': 3, 'max_pts': 2, 'manual_review': False, 'score_func': score_url_provided},
-                'Q19': {'description': 'Third-party verification details', 'tier': 2, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_text},
-                'Q20': {'description': 'Documentation for verification', 'tier': 3, 'max_pts': 2, 'manual_review': False, 'score_func': score_url_provided},
-            }
-        },
-        'tab4': {
-            'name': 'Reduction Targets',
-            'section': 3,
-            'questions': {
-                'Q1': {'description': 'Carbon neutrality goal', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab4_q1},
-                'Q2': {'description': 'Target year for carbon neutrality', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab4_q2},
-                'Q3': {'description': 'Company emissions reduction by FY 2030', 'tier': 3, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab4_q3},
-                'Q4': {'description': 'If Not sure - provide estimate', 'tier': 3, 'max_pts': 3, 'manual_review': False, 'score_func': score_tab4_q4, 'depends_on': 'Q3'},
-                'Q5a': {'description': 'Apple overall emissions reduction FY 2030', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab4_q5a},
-                'Q6': {'description': 'YoY ramp plan FY 2026-2030', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab4_q6},
-            }
-        },
-        'tab5': {
-            'name': 'Carbon Credits',
-            'section': 4,
-            'questions': {
-                'Q1': {'description': 'Carbon credits part of strategy', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab5_q1},
-                'Q2': {'description': 'Carbon credit instruments used', 'tier': 2, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab5_q2},
-                'Q3': {'description': 'Explain Others (Carbon Credits)', 'tier': 3, 'max_pts': 3, 'manual_review': True, 'review_criteria': 'Verify carbon credit strategy', 'score_func': score_conditional_text, 'depends_on': 'Q2', 'condition': 'Others'},
-                'Q4': {'description': 'Quality of carbon credits', 'tier': 2, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_text},
-                'Q5': {'description': 'Near-term approach residual emissions', 'tier': 2, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_text},
-            }
-        },
-        'tab6': {
-            'name': 'Air Freight',
-            'section': 5,
-            'conditional': 'Air',
-            'questions': {
-                'Q1': {'description': 'Air decarbonisation strategies', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab6_q1},
-                'Q2': {'description': 'Explain Others (Air)', 'tier': 3, 'max_pts': 2, 'manual_review': True, 'review_criteria': 'Verify strategy', 'score_func': score_conditional_text_2pts, 'depends_on': 'Q1', 'condition': 'Others'},
-                'Q3': {'description': 'Company SAF strategy', 'tier': 2, 'max_pts': 5, 'manual_review': True, 'review_criteria': 'Review SAF strategy quality', 'score_func': score_completion_text},
-                'Q4': {'description': 'Apple-specific SAF strategy', 'tier': 2, 'max_pts': 5, 'manual_review': True, 'review_criteria': 'Review Apple SAF commitments', 'score_func': score_completion_text},
-            }
-        },
-        'tab7': {
-            'name': 'Ocean Freight',
-            'section': 6,
-            'conditional': 'Ocean',
-            'questions': {
-                'Q1': {'description': 'Ocean decarbonisation strategies', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab7_q1},
-                'Q2': {'description': 'Explain Others (Ocean)', 'tier': 3, 'max_pts': 2, 'manual_review': True, 'review_criteria': 'Verify strategy', 'score_func': score_conditional_text_2pts, 'depends_on': 'Q1', 'condition': 'Others'},
-                'Q3': {'description': 'Alternative fuels for ocean', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab7_q3},
-                'Q4': {'description': 'Explain Others (Ocean fuels)', 'tier': 3, 'max_pts': 2, 'manual_review': True, 'review_criteria': 'Verify fuel detail', 'score_func': score_conditional_text_2pts, 'depends_on': 'Q3', 'condition': 'Others'},
-                'Q5': {'description': 'Company alternative fuel strategy', 'tier': 2, 'max_pts': 5, 'manual_review': True, 'review_criteria': 'Review fuel strategy', 'score_func': score_completion_text},
-                'Q6': {'description': 'Apple-specific ocean strategy', 'tier': 2, 'max_pts': 5, 'manual_review': True, 'review_criteria': 'Review Apple commitments', 'score_func': score_completion_text},
-            }
-        },
-        'tab8': {
-            'name': 'Ground Freight',
-            'section': 7,
-            'conditional': 'Ground',
-            'questions': {
-                'Q1': {'description': 'Ground decarbonisation strategies', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab8_q1},
-                'Q2': {'description': 'Explain Others (Ground)', 'tier': 3, 'max_pts': 2, 'manual_review': True, 'review_criteria': 'Verify strategy', 'score_func': score_conditional_text_2pts, 'depends_on': 'Q1', 'condition': 'Others'},
-                'Q3': {'description': 'Alternative fuels for ground', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab8_q3},
-                'Q4': {'description': 'Explain Others (Ground fuels)', 'tier': 3, 'max_pts': 2, 'manual_review': True, 'review_criteria': 'Verify fuel detail', 'score_func': score_conditional_text_2pts, 'depends_on': 'Q3', 'condition': 'Others'},
-                'Q5': {'description': 'Company EV/alt fuel strategy', 'tier': 2, 'max_pts': 5, 'manual_review': True, 'review_criteria': 'Review EV strategy', 'score_func': score_completion_text},
-                'Q6': {'description': 'Apple-specific ground strategy', 'tier': 2, 'max_pts': 5, 'manual_review': True, 'review_criteria': 'Review Apple commitments', 'score_func': score_completion_text},
-            }
-        }
+    return {
+        'tab3': {'name': 'Emissions Baseline', 'section': 2, 'questions': {
+            'Q4': {'description': 'GHG reporting frameworks', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab3_q4},
+            'Q6': {'description': 'Emissions reporting boundary', 'tier': 2, 'max_pts': 7, 'manual_review': False, 'score_func': score_tab3_q6},
+            'Q7': {'description': 'Unit for reporting', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab3_q7},
+            'Q8': {'description': 'Scopes included', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab3_q8},
+            'Q9': {'description': 'Company total GHG FY2025', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_numeric},
+            'Q10': {'description': 'Company Scope 1', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_numeric},
+            'Q11': {'description': 'Company Scope 2', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_numeric},
+            'Q12': {'description': 'Company Scope 3', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_numeric},
+            'Q13': {'description': 'Apple total emissions', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_numeric},
+            'Q14': {'description': 'Apple Scope 1', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_numeric},
+            'Q15': {'description': 'Apple Scope 2', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_numeric},
+            'Q16': {'description': 'Apple Scope 3', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_numeric},
+            'Q17': {'description': 'Methodology for allocation', 'tier': 2, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_text},
+            'Q18': {'description': 'Documentation for methodology', 'tier': 3, 'max_pts': 2, 'manual_review': False, 'score_func': score_url_provided},
+            'Q19': {'description': 'Third-party verification', 'tier': 2, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_text},
+            'Q20': {'description': 'Documentation for verification', 'tier': 3, 'max_pts': 2, 'manual_review': False, 'score_func': score_url_provided}}},
+        'tab4': {'name': 'Reduction Targets', 'section': 3, 'questions': {
+            'Q1': {'description': 'Carbon neutrality goal', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab4_q1},
+            'Q2': {'description': 'Target year', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab4_q2},
+            'Q3': {'description': 'Company reduction by FY2030', 'tier': 3, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab4_q3},
+            'Q4': {'description': 'If Not sure - estimate', 'tier': 3, 'max_pts': 3, 'manual_review': False, 'score_func': score_tab4_q4, 'depends_on': 'Q3'},
+            'Q5a': {'description': 'Apple reduction FY2030', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab4_q5a},
+            'Q6': {'description': 'YoY ramp plan', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab4_q6}}},
+        'tab5': {'name': 'Carbon Credits', 'section': 4, 'questions': {
+            'Q1': {'description': 'Carbon credits in strategy', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab5_q1},
+            'Q2': {'description': 'Credit instruments', 'tier': 2, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab5_q2},
+            'Q3': {'description': 'Explain Others', 'tier': 3, 'max_pts': 3, 'manual_review': True, 'review_criteria': 'Verify strategy', 'score_func': score_conditional_text, 'depends_on': 'Q2', 'condition': 'Others'},
+            'Q4': {'description': 'Quality of credits', 'tier': 2, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_text},
+            'Q5': {'description': 'Near-term approach', 'tier': 2, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_text}}},
+        'tab6': {'name': 'Air Freight', 'section': 5, 'conditional': 'Air', 'questions': {
+            'Q1': {'description': 'Air strategies', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab6_q1},
+            'Q2': {'description': 'Explain Others', 'tier': 3, 'max_pts': 2, 'manual_review': True, 'review_criteria': 'Verify', 'score_func': score_conditional_text_2pts, 'depends_on': 'Q1', 'condition': 'Others'},
+            'Q3': {'description': 'SAF strategy', 'tier': 2, 'max_pts': 5, 'manual_review': True, 'review_criteria': 'Review SAF', 'score_func': score_completion_text},
+            'Q4': {'description': 'Apple SAF strategy', 'tier': 2, 'max_pts': 5, 'manual_review': True, 'review_criteria': 'Review Apple SAF', 'score_func': score_completion_text}}},
+        'tab7': {'name': 'Ocean Freight', 'section': 6, 'conditional': 'Ocean', 'questions': {
+            'Q1': {'description': 'Ocean strategies', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab7_q1},
+            'Q2': {'description': 'Explain Others', 'tier': 3, 'max_pts': 2, 'manual_review': True, 'review_criteria': 'Verify', 'score_func': score_conditional_text_2pts, 'depends_on': 'Q1', 'condition': 'Others'},
+            'Q3': {'description': 'Alternative fuels', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab7_q3},
+            'Q4': {'description': 'Explain Others fuels', 'tier': 3, 'max_pts': 2, 'manual_review': True, 'review_criteria': 'Verify', 'score_func': score_conditional_text_2pts, 'depends_on': 'Q3', 'condition': 'Others'},
+            'Q5': {'description': 'Company fuel strategy', 'tier': 2, 'max_pts': 5, 'manual_review': True, 'review_criteria': 'Review', 'score_func': score_completion_text},
+            'Q6': {'description': 'Apple ocean strategy', 'tier': 2, 'max_pts': 5, 'manual_review': True, 'review_criteria': 'Review', 'score_func': score_completion_text}}},
+        'tab8': {'name': 'Ground Freight', 'section': 7, 'conditional': 'Ground', 'questions': {
+            'Q1': {'description': 'Ground strategies', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab8_q1},
+            'Q2': {'description': 'Explain Others', 'tier': 3, 'max_pts': 2, 'manual_review': True, 'review_criteria': 'Verify', 'score_func': score_conditional_text_2pts, 'depends_on': 'Q1', 'condition': 'Others'},
+            'Q3': {'description': 'Alternative fuels', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab8_q3},
+            'Q4': {'description': 'Explain Others fuels', 'tier': 3, 'max_pts': 2, 'manual_review': True, 'review_criteria': 'Verify', 'score_func': score_conditional_text_2pts, 'depends_on': 'Q3', 'condition': 'Others'},
+            'Q5': {'description': 'Company EV strategy', 'tier': 2, 'max_pts': 5, 'manual_review': True, 'review_criteria': 'Review', 'score_func': score_completion_text},
+            'Q6': {'description': 'Apple ground strategy', 'tier': 2, 'max_pts': 5, 'manual_review': True, 'review_criteria': 'Review', 'score_func': score_completion_text}}}
     }
-    return rules
 
 def detect_services(sheets):
     services = set()
-    for sheet_name, df in sheets.items():
-        df_str = df.to_string().lower()
-        if 'air' in df_str:
-            services.add('Air')
-        if 'ocean' in df_str or 'sea' in df_str or 'maritime' in df_str:
-            services.add('Ocean')
-        if 'ground' in df_str or 'road' in df_str or 'truck' in df_str:
-            services.add('Ground')
-    if not services:
-        services = {'Air', 'Ocean', 'Ground'}
-    return services
+    for name, df in sheets.items():
+        s = df.to_string().lower()
+        if 'air' in s: services.add('Air')
+        if 'ocean' in s or 'sea' in s: services.add('Ocean')
+        if 'ground' in s or 'road' in s or 'truck' in s: services.add('Ground')
+    return services if services else {'Air', 'Ocean', 'Ground'}
 
 def find_sheet_for_tab(sheets, tab_name, section_num):
-    for sheet_name, df in sheets.items():
-        sheet_lower = sheet_name.lower()
-        if tab_name.lower().split()[0] in sheet_lower:
+    for name, df in sheets.items():
+        if tab_name.lower().split()[0] in name.lower():
             return df
-        if f'section {section_num}' in sheet_lower:
+        if f'section {section_num}' in name.lower():
             return df
     sheet_list = list(sheets.values())
-    tab_index = section_num
-    if tab_index < len(sheet_list):
-        return sheet_list[tab_index]
-    return None
+    return sheet_list[section_num] if section_num < len(sheet_list) else None
 
 def extract_question_value(df, question_key):
     if df is None:
         return None
-    q_num = question_key.replace('Q', '').replace('a', '').replace('b', '').replace('c', '').replace('d', '')
+    q_num = question_key.replace('Q', '').replace('a', '')
+    
     for idx, row in df.iterrows():
-        row_str = ' '.join(str(v) for v in row.values if pd.notna(v))
-        if f'Q{q_num}' in row_str or f'q{q_num}' in row_str.lower():
-            for col_idx, val in enumerate(row.values):
-                if col_idx > 0 and pd.notna(val) and str(val).strip():
-                    if len(str(val)) > 5:
-                        return val
-            if idx + 1 < len(df):
-                next_row = df.iloc[idx + 1]
-                for val in next_row.values:
-                    if pd.notna(val) and str(val).strip():
-                        return val
+        first_col = str(row.iloc[0]).strip() if len(row) > 0 else ''
+        if first_col.upper() == f'Q{q_num}' or first_col == q_num:
+            if len(row) > 2:
+                val = row.iloc[2]
+                if pd.notna(val) and str(val).strip():
+                    return str(val).strip()
     return None
 
 def score_tab(sheets, tab_key, tab_rules, all_rules):
-    tab_results = {
-        'name': tab_rules['name'],
-        'section': tab_rules['section'],
-        'questions': {},
-        'raw_score': 0,
-        'weighted_score': 0,
-        'max_raw': 0,
-        'max_weighted': 0,
-        'manual_review_items': []
-    }
-    sheet_data = find_sheet_for_tab(sheets, tab_rules['name'], tab_rules['section'])
-    if sheet_data is None:
+    tab_results = {'name': tab_rules['name'], 'section': tab_rules['section'], 'questions': {}, 'raw_score': 0, 'weighted_score': 0, 'max_raw': 0, 'max_weighted': 0, 'manual_review_items': []}
+    sheet = find_sheet_for_tab(sheets, tab_rules['name'], tab_rules['section'])
+    if sheet is None:
         return tab_results
     for q_key, q_rules in tab_rules['questions'].items():
-        value = extract_question_value(sheet_data, q_key)
-        depends_value = None
-        if 'depends_on' in q_rules:
-            depends_value = extract_question_value(sheet_data, q_rules['depends_on'])
-        score_func = q_rules['score_func']
+        value = extract_question_value(sheet, q_key)
+        depends_value = extract_question_value(sheet, q_rules['depends_on']) if 'depends_on' in q_rules else None
         condition = q_rules.get('condition')
-        if 'depends_on' in q_rules:
-            score, justification = score_func(value, depends_value=depends_value, condition=condition)
-        else:
-            score, justification = score_func(value)
+        score, justification = q_rules['score_func'](value, depends_value=depends_value, condition=condition) if 'depends_on' in q_rules else q_rules['score_func'](value)
         tier = q_rules['tier']
-        weighted_score = score * TIER_WEIGHTS[tier]
+        weighted = score * TIER_WEIGHTS[tier]
         max_weighted = q_rules['max_pts'] * TIER_WEIGHTS[tier]
-        tab_results['questions'][q_key] = {
-            'description': q_rules['description'],
-            'tier': tier,
-            'raw_score': score,
-            'max_pts': q_rules['max_pts'],
-            'weighted_score': weighted_score,
-            'max_weighted': max_weighted,
-            'justification': justification,
-            'value': str(value)[:200] if value else '',
-            'manual_review': q_rules.get('manual_review', False)
-        }
+        tab_results['questions'][q_key] = {'description': q_rules['description'], 'tier': tier, 'raw_score': score, 'max_pts': q_rules['max_pts'], 'weighted_score': weighted, 'max_weighted': max_weighted, 'justification': justification, 'value': str(value)[:200] if value else '', 'manual_review': q_rules.get('manual_review', False)}
         tab_results['raw_score'] += score
-        tab_results['weighted_score'] += weighted_score
+        tab_results['weighted_score'] += weighted
         tab_results['max_raw'] += q_rules['max_pts']
         tab_results['max_weighted'] += max_weighted
-        if q_rules.get('manual_review', False) and score > 0:
-            tab_results['manual_review_items'].append({
-                'tab': tab_rules['name'],
-                'question': q_key,
-                'description': q_rules['description'],
-                'value': str(value)[:500] if value else '',
-                'current_score': score,
-                'max_score': q_rules['max_pts'],
-                'review_criteria': q_rules.get('review_criteria', 'Review response quality'),
-                'justification': justification
-            })
+        if q_rules.get('manual_review') and score > 0:
+            tab_results['manual_review_items'].append({'tab': tab_rules['name'], 'question': q_key, 'description': q_rules['description'], 'value': str(value)[:500] if value else '', 'current_score': score, 'max_score': q_rules['max_pts'], 'review_criteria': q_rules.get('review_criteria', 'Review'), 'justification': justification})
     return tab_results
 
 def score_carrier(excel_file, carrier_name=None):
     try:
         xlsx = pd.ExcelFile(excel_file)
-        sheets = {sheet: pd.read_excel(xlsx, sheet_name=sheet) for sheet in xlsx.sheet_names}
+        sheets = {s: pd.read_excel(xlsx, sheet_name=s) for s in xlsx.sheet_names}
     except Exception as e:
-        return {'error': f"Could not read Excel file: {str(e)}"}
+        return {'error': str(e)}
     services = detect_services(sheets)
     rules = get_scoring_rules()
-    results = {
-        'carrier_name': carrier_name or 'Unknown',
-        'services': services,
-        'service_type': '+'.join(sorted(services)) if services else 'Unknown',
-        'tabs': {},
-        'manual_review_items': [],
-        'total_raw': 0,
-        'total_weighted': 0,
-        'max_raw': 0,
-        'max_weighted': 0
-    }
+    results = {'carrier_name': carrier_name or 'Unknown', 'services': services, 'service_type': '+'.join(sorted(services)), 'tabs': {}, 'manual_review_items': [], 'total_raw': 0, 'total_weighted': 0, 'max_raw': 0, 'max_weighted': 0}
     for tab_key, tab_rules in rules.items():
-        if 'conditional' in tab_rules:
-            if tab_rules['conditional'] not in services:
-                continue
+        if 'conditional' in tab_rules and tab_rules['conditional'] not in services:
+            continue
         tab_results = score_tab(sheets, tab_key, tab_rules, rules)
         results['tabs'][tab_key] = tab_results
         results['total_raw'] += tab_results['raw_score']
@@ -506,12 +374,6 @@ def score_carrier(excel_file, carrier_name=None):
         results['max_raw'] += tab_results['max_raw']
         results['max_weighted'] += tab_results['max_weighted']
         results['manual_review_items'].extend(tab_results['manual_review_items'])
-    if results['max_raw'] > 0:
-        results['raw_percentage'] = round(results['total_raw'] / results['max_raw'] * 100, 1)
-    else:
-        results['raw_percentage'] = 0
-    if results['max_weighted'] > 0:
-        results['weighted_percentage'] = round(results['total_weighted'] / results['max_weighted'] * 100, 1)
-    else:
-        results['weighted_percentage'] = 0
+    results['raw_percentage'] = round(results['total_raw'] / results['max_raw'] * 100, 1) if results['max_raw'] > 0 else 0
+    results['weighted_percentage'] = round(results['total_weighted'] / results['max_weighted'] * 100, 1) if results['max_weighted'] > 0 else 0
     return results
