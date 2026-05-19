@@ -21,15 +21,23 @@ def score_completion_numeric(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
     v = str(value).lower().strip()
-    if v in ['not applicable', 'n/a', 'na', 'nil', '-', 'false']:
-        return 0, "Not Applicable"
+    if v in ['not applicable', 'n/a', 'na', 'nil', '-', 'false', 'true']:
+        return 0, f"Not Applicable: {value}"
     if v in ['0', '0%', '0.0', '0.00', '0.0%', '0.00%']:
-        return 0, "Zero reported - 0 pts"
+        return 0, "Zero reported"
+    if 'e-' in v or 'e+' in v:
+        try:
+            num_val = float(v.replace('%', ''))
+            if abs(num_val) < 0.01:
+                return 0, "Zero/negligible reported"
+            return 5, f"Numeric: {value}"
+        except:
+            return 0, f"Invalid: {value}"
     try:
         num_val = float(v.replace('%', '').replace(',', ''))
         if num_val == 0 or abs(num_val) < 0.01:
-            return 0, "Zero/negligible reported - 0 pts"
-        return 5, f"Numeric response: {value}"
+            return 0, "Zero reported"
+        return 5, f"Numeric: {value}"
     except:
         pass
     nums = re.findall(r'[\d.]+', v)
@@ -37,27 +45,36 @@ def score_completion_numeric(value, **kwargs):
         try:
             num_val = float(nums[0])
             if num_val == 0 or abs(num_val) < 0.01:
-                return 0, "Zero/negligible reported - 0 pts"
-            return 5, f"Numeric response: {value}"
+                return 0, "Zero reported"
+            return 5, f"Numeric: {value}"
         except:
             pass
     return 0, f"No valid numeric: {value}"
 
-
 def score_completion_text(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
+    v = str(value).lower().strip()
+    if v in ['false', 'true', 'n/a', 'na', 'not applicable']:
+        return 0, f"Invalid response: {value}"
+    if len(v) < 3:
+        return 0, f"Response too short: {value}"
     return 5, f"Response: {str(value)[:100]}"
 
 def score_url_provided(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
+    v = str(value).lower().strip()
+    if v in ['false', 'true', 'n/a', 'na']:
+        return 0, "No documentation"
     return 2, f"Documentation: {str(value)[:100]}"
 
 def score_tab3_q4(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
     v = str(value).lower()
+    if 'false' in v or v == 'true':
+        return 0, "No valid framework"
     if any(fw in v for fw in ['ghg protocol', 'sbti', 'glec', 'iso 14083', 'ecotransit']):
         return 5, f"Recognized framework: {value}"
     elif 'internal' in v and 'not sure' not in v and 'none' not in v:
@@ -70,6 +87,8 @@ def score_tab3_q6(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
     v = str(value).lower()
+    if 'false' in v or v == 'true':
+        return 0, "No valid boundary"
     has_valid = any(opt in v for opt in ['ttw', 'wtw', 'wtt', 'tank to wheel', 'well to wheel', 'well to tank'])
     has_wtw = 'wtw' in v or 'well to wheel' in v
     if 'not sure' in v and not has_valid:
@@ -82,12 +101,19 @@ def score_tab3_q6(value, **kwargs):
 def score_tab3_q7(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
+    v = str(value).lower()
+    if 'false' in v or v == 'true':
+        return 0, "No valid response"
+    if any(u in v for u in ['co2', 'co2e', 'both']):
+        return 5, f"Response: {value}"
     return 5, f"Response: {value}"
 
 def score_tab3_q8(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
     v = str(value).lower()
+    if 'false' in v or v == 'true':
+        return 0, "No scopes identified"
     count = 0
     if 'scope 1' in v or 'scope1' in v:
         count += 1
@@ -174,7 +200,7 @@ def score_tab4_q6(value, **kwargs):
     v = str(value)
     years = sum(1 for y in ['2026', '2027', '2028', '2029', '2030'] if y in v)
     if years >= 4:
-        return 5, f"Comprehensive ramp plan: {value}"
+        return 5, f"Comprehensive ramp plan"
     elif years >= 1:
         return 2, f"Partial plan ({years} years)"
     nums = re.findall(r'(\d+)', v)
@@ -198,6 +224,8 @@ def score_tab5_q2(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
     v = str(value).lower()
+    if 'false' in v or v == 'true':
+        return 0, "No valid instruments"
     recognized = ['nature-based', 'nature based', 'voluntary', 'regulatory', 'compliance']
     if any(r in v for r in recognized):
         return 5, f"Recognized: {value}"
@@ -212,6 +240,9 @@ def score_conditional_text(value, depends_value=None, condition=None, **kwargs):
         return 0, f"N/A - {condition} not selected"
     if is_blank(value):
         return 0, "No explanation provided"
+    v = str(value).lower()
+    if v in ['false', 'true', 'na', 'n/a']:
+        return 0, "No explanation provided"
     return 3, f"Explanation provided: {str(value)[:50]}"
 
 def score_conditional_text_2pts(value, depends_value=None, condition=None, **kwargs):
@@ -221,12 +252,17 @@ def score_conditional_text_2pts(value, depends_value=None, condition=None, **kwa
         return 0, f"N/A - {condition} not selected"
     if is_blank(value):
         return 0, "No explanation provided"
+    v = str(value).lower()
+    if v in ['false', 'true', 'na', 'n/a']:
+        return 0, "No explanation provided"
     return 2, f"Explanation provided: {str(value)[:50]}"
 
 def score_tab6_q1(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
     v = str(value).lower()
+    if 'false' in v or v == 'true':
+        return 0, "No valid strategy"
     if 'saf' in v or 'sustainable aviation fuel' in v:
         return 5, f"SAF selected: {value}"
     elif any(r in v for r in ['fleet', 'route', 'payload', 'load factor', 'modernisation', 'modernization', 'optimisation', 'optimization']):
@@ -239,6 +275,8 @@ def score_tab7_q1(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
     v = str(value).lower()
+    if 'false' in v or v == 'true':
+        return 0, "No valid strategy"
     if any(r in v for r in ['alternative fuel', 'vessel efficiency', 'route', 'slow steaming', 'optimisation', 'optimization']):
         return 5, f"Recognized: {value}"
     elif 'other' in v:
@@ -249,6 +287,8 @@ def score_tab7_q3(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
     v = str(value).lower()
+    if 'false' in v or v == 'true':
+        return 0, "No valid fuel"
     if any(r in v for r in ['lng', 'methanol', 'ammonia', 'bio-lng', 'e-lng', 'bio-methanol', 'e-methanol']):
         return 5, f"Recognized fuel: {value}"
     elif 'other' in v:
@@ -259,6 +299,8 @@ def score_tab8_q1(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
     v = str(value).lower()
+    if 'false' in v or v == 'true':
+        return 0, "No valid strategy"
     if any(r in v for r in ['electric', 'bev', 'hybrid', 'alternative fuel', 'biofuel', 'route', 'load', 'ev']):
         return 5, f"Recognized: {value}"
     elif 'other' in v:
@@ -269,6 +311,8 @@ def score_tab8_q3(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
     v = str(value).lower()
+    if 'false' in v or v == 'true':
+        return 0, "No valid fuel"
     if any(r in v for r in ['biofuel', 'renewable diesel', 'rng', 'hvo', 'biodiesel', 'hydrogen', 'fuel cell', 'bio-cng', 'bio-lng']):
         return 5, f"Recognized fuel: {value}"
     elif 'other' in v:
@@ -352,44 +396,53 @@ def find_sheet_for_tab(sheets, tab_name, section_num):
     sheet_list = list(sheets.values())
     return sheet_list[section_num] if section_num < len(sheet_list) else None
 
-def extract_checkbox_values(df, start_idx):
+def find_response_column(df):
+    for idx, col in enumerate(df.columns):
+        col_str = str(col).lower()
+        if 'response' in col_str or 'your response' in col_str:
+            return idx
+    if len(df.columns) > 2:
+        return 2
+    return None
+
+def extract_checkbox_values(df, start_idx, response_col):
     selected = []
     idx = start_idx + 1
     while idx < len(df):
         row = df.iloc[idx]
         col_a = str(row.iloc[0]).strip() if len(row) > 0 and pd.notna(row.iloc[0]) else ''
-        if col_a.upper().startswith('Q') and col_a[1:].replace('a','').replace('b','').isdigit():
-            break
-        if len(row) > 2:
+        if col_a.upper().startswith('Q') and len(col_a) <= 4:
+            if col_a[1:].replace('a','').replace('b','').replace('c','').replace('d','').isdigit():
+                break
+        if len(row) > response_col:
             col_b = str(row.iloc[1]).strip() if pd.notna(row.iloc[1]) else ''
-            col_c = row.iloc[2] if pd.notna(row.iloc[2]) else ''
-            col_c_str = str(col_c).strip().lower()
-            is_checked = col_c_str in ['true', '1', 'x', '✓', '☑', 'yes'] or col_c_str == 'true' or (isinstance(col_c, bool) and col_c)
-            if is_checked and col_b and 'check box' not in col_b.lower() and 'select' not in col_b.lower():
-                selected.append(col_b)
-            if col_c_str and col_c_str not in ['false', '0', '', 'nan', 'na', 'n/a'] and 'check box' not in col_c_str and 'select' not in col_c_str:
-                if not is_checked and col_b:
-                    selected.append(col_b)
+            col_resp = row.iloc[response_col] if pd.notna(row.iloc[response_col]) else None
+            if col_b and 'check box' not in col_b.lower() and 'select' not in col_b.lower() and len(col_b) > 2:
+                if col_resp is not None:
+                    resp_str = str(col_resp).strip().lower()
+                    is_checked = resp_str in ['true', '1', 'x', '✓', '☑', 'yes'] or (isinstance(col_resp, bool) and col_resp)
+                    if is_checked:
+                        selected.append(col_b)
         idx += 1
     return ', '.join(selected) if selected else None
 
-def extract_sub_row_value(df, start_idx, sub_text):
+def extract_sub_row_value(df, start_idx, sub_text, response_col):
     idx = start_idx + 1
     while idx < len(df):
         row = df.iloc[idx]
         col_a = str(row.iloc[0]).strip() if len(row) > 0 and pd.notna(row.iloc[0]) else ''
-        if col_a.upper().startswith('Q') and len(col_a) > 1:
+        if col_a.upper().startswith('Q') and len(col_a) <= 4:
             break
-        if len(row) > 2:
+        if len(row) > response_col:
             col_b = str(row.iloc[1]).strip().lower() if pd.notna(row.iloc[1]) else ''
             if sub_text.lower() in col_b:
-                col_c = row.iloc[2] if pd.notna(row.iloc[2]) else None
-                if col_c and str(col_c).strip():
-                    return str(col_c).strip()
+                col_resp = row.iloc[response_col]
+                if pd.notna(col_resp) and str(col_resp).strip():
+                    return str(col_resp).strip()
         idx += 1
     return None
 
-def extract_ramp_plan_values(df, start_idx):
+def extract_ramp_plan_values(df, start_idx, response_col):
     values = {}
     idx = start_idx + 1
     while idx < len(df):
@@ -397,12 +450,12 @@ def extract_ramp_plan_values(df, start_idx):
         col_a = str(row.iloc[0]).strip() if len(row) > 0 and pd.notna(row.iloc[0]) else ''
         if col_a.upper().startswith('Q') and col_a[1:].isdigit():
             break
-        if len(row) > 2:
+        if len(row) > response_col:
             col_b = str(row.iloc[1]).strip() if pd.notna(row.iloc[1]) else ''
-            col_c = str(row.iloc[2]).strip() if pd.notna(row.iloc[2]) else ''
+            col_resp = str(row.iloc[response_col]).strip() if pd.notna(row.iloc[response_col]) else ''
             for year in ['2026', '2027', '2028', '2029', '2030']:
-                if year in col_b and col_c:
-                    values[year] = col_c
+                if year in col_b and col_resp and col_resp.lower() not in ['false', 'true', '']:
+                    values[year] = col_resp
         idx += 1
     if values:
         return ', '.join([f"{k}: {v}" for k, v in values.items()])
@@ -417,23 +470,33 @@ def extract_question_value(df, question_key, q_rules=None):
     is_sub_row = q_rules.get('is_sub_row', False) if q_rules else False
     sub_row_text = q_rules.get('sub_row_text', '') if q_rules else ''
     
+    response_col = find_response_column(df)
+    if response_col is None:
+        response_col = 2
+    
     for idx, row in df.iterrows():
         col_a = str(row.iloc[0]).strip().upper() if len(row) > 0 and pd.notna(row.iloc[0]) else ''
         
         if col_a == f'Q{q_num}':
             if is_checkbox:
-                return extract_checkbox_values(df, idx)
+                result = extract_checkbox_values(df, idx, response_col)
+                if result:
+                    return result
             elif is_sub_row and sub_row_text:
-                return extract_sub_row_value(df, idx, sub_row_text)
-            elif question_key == 'Q6' and q_rules and q_rules.get('description', '').lower().find('ramp') >= 0:
-                return extract_ramp_plan_values(df, idx)
-            else:
-                if len(row) > 2:
-                    col_c = row.iloc[2]
-                    if pd.notna(col_c) and str(col_c).strip():
-                        val = str(col_c).strip()
-                        if 'check box' not in val.lower() and 'select' not in val.lower():
-                            return val
+                result = extract_sub_row_value(df, idx, sub_row_text, response_col)
+                if result:
+                    return result
+            elif question_key == 'Q6' and q_rules and 'ramp' in q_rules.get('description', '').lower():
+                result = extract_ramp_plan_values(df, idx, response_col)
+                if result:
+                    return result
+            
+            if len(row) > response_col:
+                col_resp = row.iloc[response_col]
+                if pd.notna(col_resp):
+                    val = str(col_resp).strip()
+                    if val and val.lower() not in ['check boxes that apply', 'check box', 'select', 'select one', 'select all']:
+                        return val
     return None
 
 def score_tab(sheets, tab_key, tab_rules, all_rules):
