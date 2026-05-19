@@ -21,17 +21,28 @@ def score_completion_numeric(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
     v = str(value).lower().strip()
-    if v in ['not applicable', 'n/a', 'na', 'nil', '-']:
-        return 0, "Not Applicable - no emissions attributed"
-    if v in ['0', '0%', '0.0', '0.00', '0.0%']:
-        return 0, "Zero emissions reported - 0 pts"
+    if v in ['not applicable', 'n/a', 'na', 'nil', '-', 'false']:
+        return 0, "Not Applicable"
+    if v in ['0', '0%', '0.0', '0.00', '0.0%', '0.00%']:
+        return 0, "Zero reported - 0 pts"
+    try:
+        num_val = float(v.replace('%', '').replace(',', ''))
+        if num_val == 0 or abs(num_val) < 0.01:
+            return 0, "Zero/negligible reported - 0 pts"
+        return 5, f"Numeric response: {value}"
+    except:
+        pass
     nums = re.findall(r'[\d.]+', v)
     if nums:
-        num_val = float(nums[0])
-        if num_val == 0:
-            return 0, "Zero emissions reported - 0 pts"
-        return 5, f"Numeric response: {value}"
-    return 0, "No numeric value found"
+        try:
+            num_val = float(nums[0])
+            if num_val == 0 or abs(num_val) < 0.01:
+                return 0, "Zero/negligible reported - 0 pts"
+            return 5, f"Numeric response: {value}"
+        except:
+            pass
+    return 0, f"No valid numeric: {value}"
+
 
 def score_completion_text(value, **kwargs):
     if is_blank(value):
