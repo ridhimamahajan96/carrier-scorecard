@@ -21,12 +21,10 @@ def calculate_all_curve_scores():
     
     curve_scores = {}
     
-    # Q3 - Company reduction (tab4)
     q3_curves = calculate_curve_scores(st.session_state.results, 'Q3', 'tab4')
     if q3_curves:
         curve_scores['tab4_Q3'] = q3_curves
     
-    # Q5a - Apple reduction (tab4)
     q5a_curves = calculate_curve_scores(st.session_state.results, 'Q5a', 'tab4')
     if q5a_curves:
         curve_scores['tab4_Q5a'] = q5a_curves
@@ -50,7 +48,6 @@ def calculate_adjusted_scores(carrier, results):
         key = f"{carrier}_{item['tab']}_{item['question']}"
         review = st.session_state.manual_reviews.get(key, {})
         
-        # Get tier for weighted calculation
         tier = None
         original_score = item['current_score']
         for tab_key, tab_res in results.get('tabs', {}).items():
@@ -59,21 +56,9 @@ def calculate_adjusted_scores(carrier, results):
                 tier = q_data.get('tier')
                 break
         
-        if review.get('status') == 'rejected':
-            # Subtract the original score
-            adjusted_raw -= original_score
-            if tier:
-                adjusted_weighted -= original_score * TIER_WEIGHTS[tier]
-        elif review.get('status') == 'approved' and review.get('score') != original_score:
-            # Apply manual score override
-            score_diff = review.get('score', original_score) - original_score
-            adjusted_raw += score_diff
-            if tier:
-                adjusted_weighted += score_diff * TIER_WEIGHTS[tier]
-        elif review.get('status') == 'curve_applied':
-            # Apply curve score
-            curve_score = review.get('score', original_score)
-            score_diff = curve_score - original_score
+        if review.get('status') in ['approved', 'curve_applied', 'manual']:
+            new_score = review.get('score', original_score)
+            score_diff = new_score - original_score
             adjusted_raw += score_diff
             if tier:
                 adjusted_weighted += score_diff * TIER_WEIGHTS[tier]
@@ -96,16 +81,12 @@ with st.sidebar:
     st.markdown("""
     1. Upload carrier Excel files
     2. Review automatic scores
-    3. Approve/Reject manual items
-    4. Apply curve scoring
-    5. Export results
+    3. Approve/Reject/Adjust manual items
+    4. Export results
     """)
     st.divider()
     st.header("📊 Scoring Tiers")
     st.markdown("🔴 **Tier 1** (Critical): 3x\n\n🟡 **Tier 2** (Important): 2x\n\n🟢 **Tier 3** (Bonus): 1x\n\n⚪ **Unscored**: 0x")
-    st.divider()
-    st.header("📈 Curve Scoring")
-    st.markdown("Questions marked with 📊 use graded curve based on all carrier responses")
     st.divider()
     if st.button("🗑️ Clear All Data"):
         st.session_state.results = {}
@@ -136,14 +117,11 @@ if uploaded_files:
                 st.error(f"Error processing {file.name}: {results['error']}")
             progress.progress((i + 1) / len(uploaded_files))
         
-        # Calculate curve scores after all carriers are processed
         st.session_state.curve_scores = calculate_all_curve_scores()
-        
-        st.success("✅ All files processed! Curve scores calculated.")
+        st.success("✅ All files processed!")
         st.rerun()
 
 if st.session_state.results:
-    # Recalculate curves if needed
     if not st.session_state.curve_scores and len(st.session_state.results) > 0:
         st.session_state.curve_scores = calculate_all_curve_scores()
     
@@ -152,8 +130,7 @@ if st.session_state.results:
     for carrier, results in st.session_state.results.items():
         adjusted = calculate_adjusted_scores(carrier, results)
         pending = len([r for r in results.get('manual_review_items', []) if st.session_state.manual_reviews.get(f"{carrier}_{r['tab']}_{r['question']}", {}).get('status') == 'pending'])
-        approved = len([r for r in results.get('manual_review_items', []) if st.session_state.manual_reviews.get(f"{carrier}_{r['tab']}_{r['question']}", {}).get('status') in ['approved', 'curve_applied']])
-        rejected = len([r for r in results.get('manual_review_items', []) if st.session_state.manual_reviews.get(f"{carrier}_{r['tab']}_{r['question']}", {}).get('status') == 'rejected'])
+        reviewed = len([r for r in results.get('manual_review_items', []) if st.session_state.manual_reviews.get(f"{carrier}_{r['tab']}_{r['question']}", {}).get('status') != 'pending'])
         
         ranking_data.append({
             'Carrier': carrier,
@@ -162,7 +139,7 @@ if st.session_state.results:
             'Adjusted Score': adjusted['adjusted_weighted'],
             'Adjusted %': adjusted['adjusted_weighted_pct'],
             'Pending': pending,
-            'Reviewed': approved + rejected
+            'Reviewed': reviewed
         })
     ranking_df = pd.DataFrame(ranking_data).sort_values('Adjusted %', ascending=False).reset_index(drop=True)
     ranking_df.index = ranking_df.index + 1
@@ -234,7 +211,6 @@ if st.session_state.results:
                     curve_label = " 📊 CURVE" if is_curve else ""
                     st.markdown(f"**{q_key}**: {q_data['description']} {tier_icon} {tier_label}{curve_label}")
                     
-                    # Show curve info if applicable
                     if is_curve:
                         curve_info = get_curve_score_for_carrier(selected, tab_key, q_key)
                         if curve_info:
@@ -248,12 +224,9 @@ if st.session_state.results:
     st.divider()
     st.header("🔍 Manual Review")
     
-    # Show summary
     total_items = 0
     pending_count = 0
-    approved_count = 0
-    rejected_count = 0
-    curve_count = 0
+    reviewed_count = 0
     
     for carrier, res in st.session_state.results.items():
         for item in res.get('manual_review_items', []):
@@ -262,24 +235,17 @@ if st.session_state.results:
             status = st.session_state.manual_reviews.get(key, {}).get('status', 'pending')
             if status == 'pending':
                 pending_count += 1
-            elif status == 'approved':
-                approved_count += 1
-            elif status == 'rejected':
-                rejected_count += 1
-            elif status == 'curve_applied':
-                curve_count += 1
+            else:
+                reviewed_count += 1
     
     st.markdown(f"""
-    **Review Progress:** {approved_count + rejected_count + curve_count}/{total_items} completed
+    **Review Progress:** {reviewed_count}/{total_items} completed
     - 🟡 Pending: **{pending_count}**
-    - 🟢 Approved: **{approved_count}**  
-    - 🔴 Rejected: **{rejected_count}**
-    - 📊 Curve Applied: **{curve_count}**
+    - ✅ Reviewed: **{reviewed_count}**
     """)
     
     st.divider()
     
-    # Collect items
     items = []
     for carrier, res in st.session_state.results.items():
         for item in res.get('manual_review_items', []):
@@ -303,11 +269,11 @@ if st.session_state.results:
             })
 
     if items:
-        filter_opt = st.selectbox("Filter:", ['All', 'Pending', 'Approved', 'Rejected', 'Curve Applied'])
-        if filter_opt == 'Curve Applied':
-            filtered = [i for i in items if i['status'] == 'curve_applied']
-        elif filter_opt != 'All':
-            filtered = [i for i in items if i['status'].lower() == filter_opt.lower()]
+        filter_opt = st.selectbox("Filter:", ['All', 'Pending', 'Reviewed'])
+        if filter_opt == 'Pending':
+            filtered = [i for i in items if i['status'] == 'pending']
+        elif filter_opt == 'Reviewed':
+            filtered = [i for i in items if i['status'] != 'pending']
         else:
             filtered = items
         
@@ -317,113 +283,92 @@ if st.session_state.results:
             current_status = review.get('status', 'pending')
             is_curve = item.get('is_curve', False)
             
-            # Status indicator
             if current_status == 'pending':
                 status_icon = "🟡"
-                status_text = "PENDING"
-            elif current_status == 'approved':
-                status_icon = "🟢"
-                status_text = "APPROVED"
-            elif current_status == 'curve_applied':
-                status_icon = "📊"
-                status_text = "CURVE APPLIED"
+                status_text = "PENDING REVIEW"
             else:
-                status_icon = "🔴"
-                status_text = "REJECTED"
+                status_icon = "✅"
+                status_text = "REVIEWED"
             
             original_score = item['current_score']
+            current_score = review.get('score', original_score)
+            max_score = item['max_score']
             tier = item.get('tier', 1)
-            weighted_impact = original_score * TIER_WEIGHTS.get(tier, 1) if tier else 0
             
-            curve_label = " 📊 CURVE SCORING" if is_curve else ""
+            curve_label = " 📊 CURVE" if is_curve else ""
             st.markdown(f"### {status_icon} {item['carrier']} | {item['tab']} - {item['question']}{curve_label}")
             
-            col1, col2, col3 = st.columns([2, 1, 1])
+            # Show info
+            col1, col2, col3 = st.columns([3, 1, 1])
             with col1:
                 st.write(f"**{item['description']}**")
             with col2:
-                st.metric("Auto Score", f"{original_score}/{item['max_score']}")
+                st.metric("Auto Score", f"{original_score}/{max_score}")
             with col3:
-                current_score = review.get('score', original_score)
-                current_weighted = current_score * TIER_WEIGHTS.get(tier, 1) if tier else 0
-                if current_status == 'rejected':
-                    st.metric("Final Score", "0", f"-{original_score}")
-                else:
-                    delta = current_score - original_score
-                    st.metric("Final Score", f"{current_score}", f"{delta:+d}" if delta != 0 else None)
+                delta = current_score - original_score
+                st.metric("Final Score", f"{current_score}/{max_score}", 
+                         f"{delta:+d}" if delta != 0 else None,
+                         delta_color="normal" if delta >= 0 else "inverse")
             
-            # Show curve info if applicable
+            # Show curve info
             if is_curve:
                 curve_info = get_curve_score_for_carrier(item['carrier'], item['tab_key'], item['question'])
                 if curve_info:
-                    st.info(f"📊 **Curve Analysis:** Reported {curve_info['value']}% | Rank {curve_info['rank']} of {curve_info['total_carriers']} carriers | Percentile: {curve_info['percentile']}% | **Suggested Score: {curve_info['score']}/5**")
+                    st.info(f"📊 **Curve Analysis:** Reported {curve_info['value']}% | Rank {curve_info['rank']} of {curve_info['total_carriers']} | Percentile: {curve_info['percentile']}% | **Suggested: {curve_info['score']}/5**")
             
+            # Response and criteria
             item_value = item.get('value', '')
-            if len(item_value) > 200:
-                st.write(f"**Response:** {item_value[:200]}...")
-            else:
-                st.write(f"**Response:** {item_value}")
+            if item_value:
+                if len(item_value) > 300:
+                    st.write(f"**Response:** {item_value[:300]}...")
+                else:
+                    st.write(f"**Response:** {item_value}")
             st.caption(f"Review Criteria: {item['review_criteria']}")
-            st.caption(f"Justification: {item['justification']}")
+            st.caption(f"Auto Justification: {item['justification']}")
             
-            # Action buttons
-            if is_curve:
-                c1, c2, c3, c4 = st.columns(4)
-                with c1:
+            # Simple action buttons + slider
+            st.markdown("**Set Final Score:**")
+            
+            col1, col2, col3, col4 = st.columns([1, 1, 1, 2])
+            
+            with col1:
+                if is_curve:
                     curve_info = get_curve_score_for_carrier(item['carrier'], item['tab_key'], item['question'])
                     curve_score = curve_info['score'] if curve_info else original_score
-                    if st.button(f"📊 Apply Curve ({curve_score})", key=f"curve_{key}", 
-                               disabled=current_status == 'curve_applied',
-                               use_container_width=True,
-                               type="primary" if current_status == 'pending' else "secondary"):
+                    if st.button(f"📊 Use Curve ({curve_score})", key=f"curve_{key}", use_container_width=True):
                         st.session_state.manual_reviews[key] = {'status': 'curve_applied', 'score': curve_score, 'is_curve': True}
                         st.rerun()
-                with c2:
-                    if st.button("✅ Approve Auto", key=f"a_{key}", 
-                               disabled=current_status == 'approved',
-                               use_container_width=True):
-                        st.session_state.manual_reviews[key] = {'status': 'approved', 'score': original_score, 'is_curve': True}
-                        st.rerun()
-                with c3:
-                    if st.button("❌ Reject (0)", key=f"r_{key}", 
-                               disabled=current_status == 'rejected',
-                               use_container_width=True):
-                        st.session_state.manual_reviews[key] = {'status': 'rejected', 'score': 0, 'is_curve': True}
-                        st.rerun()
-                with c4:
-                    manual_score = st.number_input("Manual:", 0, item['max_score'], 
-                                                   review.get('score', original_score), 
-                                                   key=f"s_{key}")
-                    if st.button("💾 Set", key=f"set_{key}"):
-                        st.session_state.manual_reviews[key] = {'status': 'approved', 'score': manual_score, 'is_curve': True}
-                        st.rerun()
-            else:
-                c1, c2, c3, c4 = st.columns(4)
-                with c1:
-                    if st.button("✅ Approve", key=f"a_{key}", 
-                               disabled=current_status == 'approved',
-                               use_container_width=True,
-                               type="primary" if current_status == 'pending' else "secondary"):
+                else:
+                    if st.button(f"✅ Accept ({original_score})", key=f"accept_{key}", use_container_width=True):
                         st.session_state.manual_reviews[key] = {'status': 'approved', 'score': original_score}
                         st.rerun()
-                with c2:
-                    if st.button("❌ Reject", key=f"r_{key}", 
-                               disabled=current_status == 'rejected',
-                               use_container_width=True):
-                        st.session_state.manual_reviews[key] = {'status': 'rejected', 'score': 0}
-                        st.rerun()
-                with c3:
-                    if current_status != 'pending':
-                        if st.button("↩️ Reset", key=f"reset_{key}"):
-                            st.session_state.manual_reviews[key] = {'status': 'pending', 'score': original_score}
-                            st.rerun()
-                with c4:
-                    manual_score = st.number_input("Score:", 0, item['max_score'], 
-                                                   review.get('score', original_score), 
-                                                   key=f"s_{key}")
-                    if st.button("💾 Set", key=f"set_{key}"):
-                        st.session_state.manual_reviews[key] = {'status': 'approved', 'score': manual_score}
-                        st.rerun()
+            
+            with col2:
+                if st.button(f"🎯 Give Max ({max_score})", key=f"max_{key}", use_container_width=True):
+                    st.session_state.manual_reviews[key] = {'status': 'manual', 'score': max_score}
+                    st.rerun()
+            
+            with col3:
+                if st.button("❌ Give Zero", key=f"zero_{key}", use_container_width=True):
+                    st.session_state.manual_reviews[key] = {'status': 'manual', 'score': 0}
+                    st.rerun()
+            
+            with col4:
+                new_score = st.slider(
+                    "Custom score:",
+                    min_value=0,
+                    max_value=max_score,
+                    value=current_score,
+                    key=f"slider_{key}"
+                )
+                if new_score != current_score:
+                    st.session_state.manual_reviews[key] = {'status': 'manual', 'score': new_score}
+                    st.rerun()
+            
+            if current_status != 'pending':
+                if st.button("↩️ Reset to Pending", key=f"reset_{key}"):
+                    st.session_state.manual_reviews[key] = {'status': 'pending', 'score': original_score}
+                    st.rerun()
             
             st.divider()
     else:
@@ -431,7 +376,6 @@ if st.session_state.results:
 
     st.divider()
     
-    # Export Section
     st.header("📥 Export Results")
     
     st.subheader("📊 Final Adjusted Scores")
@@ -451,7 +395,6 @@ if st.session_state.results:
     if st.button("📊 Download Excel Report", type="primary"):
         output = BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            # Rankings
             export_ranking = []
             for carrier, results in st.session_state.results.items():
                 adjusted = calculate_adjusted_scores(carrier, results)
@@ -471,39 +414,25 @@ if st.session_state.results:
             export_df['Rank'] = range(1, len(export_df) + 1)
             export_df.to_excel(writer, sheet_name='Rankings', index=False)
             
-            # Manual review decisions
             review_data = []
             for carrier, res in st.session_state.results.items():
                 for item in res.get('manual_review_items', []):
                     key = f"{carrier}_{item['tab']}_{item['question']}"
                     review = st.session_state.manual_reviews.get(key, {})
-                    
-                    # Get curve info
-                    curve_info = None
-                    if item.get('is_curve'):
-                        for tab_key, tab_res in res.get('tabs', {}).items():
-                            if tab_res['name'] == item['tab']:
-                                curve_info = get_curve_score_for_carrier(carrier, tab_key, item['question'])
-                                break
-                    
                     review_data.append({
                         'Carrier': carrier,
                         'Section': item['tab'],
                         'Question': item['question'],
                         'Description': item['description'],
-                        'Original Score': item['current_score'],
+                        'Auto Score': item['current_score'],
                         'Max Score': item['max_score'],
-                        'Decision': review.get('status', 'pending').upper(),
-                        'Final Score': review.get('score', item['current_score']) if review.get('status') != 'rejected' else 0,
-                        'Is Curve': 'Yes' if item.get('is_curve') else 'No',
-                        'Curve Rank': curve_info['rank'] if curve_info else '',
-                        'Curve Percentile': curve_info['percentile'] if curve_info else '',
+                        'Final Score': review.get('score', item['current_score']),
+                        'Status': review.get('status', 'pending').upper(),
                         'Response': item.get('value', '')[:200]
                     })
             if review_data:
                 pd.DataFrame(review_data).to_excel(writer, sheet_name='Manual Reviews', index=False)
             
-            # Curve analysis
             if st.session_state.curve_scores:
                 curve_data = []
                 for q_key, carriers in st.session_state.curve_scores.items():
@@ -520,7 +449,6 @@ if st.session_state.results:
                 if curve_data:
                     pd.DataFrame(curve_data).to_excel(writer, sheet_name='Curve Analysis', index=False)
             
-            # Detailed scores per carrier
             for carrier, res in st.session_state.results.items():
                 data = []
                 for tab_key, tab_res in res.get('tabs', {}).items():
@@ -532,7 +460,6 @@ if st.session_state.results:
                             'Tier': q_data.get('tier', 'N/A'),
                             'Score': q_data['raw_score'],
                             'Max': q_data['max_pts'],
-                            'Is Curve': 'Yes' if q_data.get('is_curve') else 'No',
                             'Justification': q_data['justification'],
                             'Response': q_data.get('value', '')[:500]
                         })
