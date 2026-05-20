@@ -1,6 +1,6 @@
 # =============================================================================
 # SCORING ENGINE - Sustainability Transport Supplier Scorecard
-# Version 2.2 - Updated Reduction Targets Rules
+# Version 2.3 - Fixed Q4 conditional scoring
 # =============================================================================
 
 import pandas as pd
@@ -51,7 +51,6 @@ def extract_percentage(value):
     v = str(value).lower().strip()
     if v in ['not applicable', 'n/a', 'na', 'nil', '-', 'false', 'true', 'not sure']:
         return None
-    # Look for percentage patterns
     nums = re.findall(r'(\d+(?:\.\d+)?)\s*%?', v)
     if nums:
         try:
@@ -132,7 +131,7 @@ def score_tab3_q4(value, **kwargs):
     return 0, f"No valid framework: {value}"
 
 def score_tab3_q5(value, depends_value=None, **kwargs):
-    """Q5: Conditional - 2 pts if Q4='not sure' and explanation provided, flagged for manual review"""
+    """Q5: Conditional - 2 pts if Q4='not sure' and explanation provided"""
     if depends_value is None:
         return 0, "Q4 value not available"
     q4_lower = str(depends_value).lower() if depends_value else ''
@@ -164,7 +163,7 @@ def score_tab3_q6(value, **kwargs):
     return 0, f"No valid boundary: {value}"
 
 def score_tab3_q7(value, **kwargs):
-    """Q7: Unit for reporting - Tier 2, CO2e=5, CO2=3, Both=5, no response=0"""
+    """Q7: Unit for reporting - Tier 2, CO2e=5, CO2=3, Both=5"""
     if is_blank(value):
         return 0, "Blank response"
     v = str(value).lower()
@@ -201,13 +200,13 @@ def score_tab3_q8(value, **kwargs):
     return 0, f"No scopes identified: {value}"
 
 # =============================================================================
-# TAB 4: REDUCTION TARGETS SCORING FUNCTIONS (UPDATED)
+# TAB 4: REDUCTION TARGETS SCORING FUNCTIONS
 # =============================================================================
 
 def score_tab4_q1(value, **kwargs):
-    """Q1: Carbon neutrality goal - No = 0 pts (updated)"""
+    """Q1: Carbon neutrality goal - No = 0 pts"""
     if is_blank(value):
-        return 0, "Blank response"
+        return 0, "Blank response - 0 pts"
     v = str(value).lower().strip()
     if v == 'yes':
         return 5, "Yes - has carbon neutrality goal"
@@ -235,7 +234,7 @@ def score_tab4_q2(value, **kwargs):
     return 0, f"Could not determine: {value}"
 
 def score_tab4_q3_curve(value, **kwargs):
-    """Q3: Company level emissions reduction by 2030 - Tier 2, graded curve, manual review"""
+    """Q3: Company level emissions reduction by 2030 - Tier 2, graded curve"""
     if is_blank(value):
         return 0, "Blank response - 0 pts", None
     
@@ -243,28 +242,30 @@ def score_tab4_q3_curve(value, **kwargs):
     if v in ['not sure', 'n/a', 'na', 'false', 'true']:
         return 0, "Not sure/No answer - 0 pts", None
     
-    # Extract percentage
     pct = extract_percentage(value)
     
     if pct is None:
         return 0, f"Could not extract percentage from: {value}", None
     
-    # Return preliminary score of 3 (middle), will be adjusted by curve
-    # The actual curve scoring happens in the app after all carriers are processed
     justification = f"Reported {pct}% reduction target - PENDING CURVE ADJUSTMENT (Manual review required)"
-    
-    return 3, justification, pct  # Return pct for curve calculation
+    return 3, justification, pct
 
-def score_tab4_q4_updated(value, depends_value=None, **kwargs):
-    """Q4: If Not sure - estimate - Tier 2, 5 pts for clear goal with year, manual review"""
+def score_tab4_q4_conditional(value, depends_value=None, **kwargs):
+    """Q4: Estimate if Q3='not sure' - ONLY SCORES IF Q3 = 'not sure'"""
+    if depends_value is None:
+        return 0, "N/A - Q3 value not available"
+    
+    q3_lower = str(depends_value).lower().strip()
+    if 'not sure' not in q3_lower:
+        return 0, "N/A - Q3 was not 'Not sure' (Q4 only scored when Q3 = Not sure)"
+    
     if is_blank(value):
-        return 0, "Blank response"
+        return 0, "Q3 was 'Not sure' but no estimate provided in Q4 (Manual review required)"
     
     v = str(value).lower().strip()
     if v in ['false', 'true', 'n/a', 'na']:
-        return 0, "No valid response"
+        return 0, "No valid response provided (Manual review required)"
     
-    # Check for clear number goal with year
     has_number = bool(re.search(r'\d+', v))
     has_year = bool(re.search(r'20\d{2}', v))
     has_percentage = '%' in v or 'percent' in v
@@ -279,7 +280,7 @@ def score_tab4_q4_updated(value, depends_value=None, **kwargs):
         return 2, f"Goal described but not quantified: {value} (Manual review required)"
 
 def score_tab4_q5a_curve(value, **kwargs):
-    """Q5a: Apple specific overall emissions reduction - Tier 1, graded curve, manual review"""
+    """Q5a: Apple specific overall emissions reduction - Tier 1, graded curve"""
     if is_blank(value):
         return 0, "Blank response - 0 pts", None
     
@@ -287,7 +288,6 @@ def score_tab4_q5a_curve(value, **kwargs):
     if v in ['not sure', 'n/a', 'na', 'false', 'true', '0', '0%']:
         return 0, "No reduction target - 0 pts", None
     
-    # Extract percentage
     pct = extract_percentage(value)
     
     if pct is None:
@@ -296,10 +296,8 @@ def score_tab4_q5a_curve(value, **kwargs):
     if pct == 0:
         return 0, "0% reduction target - 0 pts", 0
     
-    # Return preliminary score of 3 (middle), will be adjusted by curve
     justification = f"Reported {pct}% Apple-specific reduction - PENDING CURVE ADJUSTMENT (Manual review required)"
-    
-    return 3, justification, pct  # Return pct for curve calculation
+    return 3, justification, pct
 
 def score_tab4_q5_scope(value, **kwargs):
     """Q5b/c/d: Apple scope breakdown - Tier 2"""
@@ -315,19 +313,15 @@ def score_tab4_q5_scope(value, **kwargs):
     if pct is None:
         return 0, f"Could not extract percentage: {value}", None
     
-    # Preliminary score - validation happens separately
     return 5, f"Scope reduction: {pct}%", pct
 
 def validate_q5_scope_totals(q5a_val, q5b_val, q5c_val, q5d_val):
     """Validate that Q5b+Q5c+Q5d scope breakdowns align with Q5a overall"""
-    issues = []
-    
     q5a_pct = extract_percentage(q5a_val)
     q5b_pct = extract_percentage(q5b_val)
     q5c_pct = extract_percentage(q5c_val)
     q5d_pct = extract_percentage(q5d_val)
     
-    # Check if we have enough data to validate
     scope_values = [q5b_pct, q5c_pct, q5d_pct]
     valid_scopes = [v for v in scope_values if v is not None]
     
@@ -340,18 +334,17 @@ def validate_q5_scope_totals(q5a_val, q5b_val, q5c_val, q5d_val):
     if len(valid_scopes) < 3:
         return False, f"Incomplete scope data: only {len(valid_scopes)}/3 scopes provided"
     
-    # Calculate average of scopes (they should roughly align with overall)
     scope_avg = sum(valid_scopes) / len(valid_scopes)
     
-    # Check if scope average is within reasonable range of overall (allow 20% variance)
     if q5a_pct > 0:
         variance = abs(scope_avg - q5a_pct) / q5a_pct * 100
-        if variance > 50:  # More than 50% variance
+        if variance > 50:
             return False, f"Scope breakdown avg ({scope_avg:.1f}%) differs significantly from overall ({q5a_pct}%) - {variance:.1f}% variance"
     
     return True, f"Scope breakdown validates: avg {scope_avg:.1f}% vs overall {q5a_pct}%"
 
 def score_tab4_q6(value, **kwargs):
+    """Q6: YoY ramp plan"""
     if is_blank(value):
         return 0, "Blank response"
     v = str(value)
@@ -498,9 +491,6 @@ def score_tab8_q3(value, **kwargs):
 
 def get_scoring_rules():
     return {
-        # =====================================================================
-        # TAB 3: EMISSIONS BASELINE (Section 2)
-        # =====================================================================
         'tab3': {'name': 'Emissions Baseline', 'section': 2, 'questions': {
             'Q4': {
                 'description': 'GHG reporting frameworks',
@@ -647,9 +637,6 @@ def get_scoring_rules():
             },
         }},
         
-        # =====================================================================
-        # TAB 4: REDUCTION TARGETS (Section 3) - UPDATED
-        # =====================================================================
         'tab4': {'name': 'Reduction Targets', 'section': 3, 'questions': {
             'Q1': {
                 'description': 'Carbon neutrality goal',
@@ -667,35 +654,36 @@ def get_scoring_rules():
             },
             'Q3': {
                 'description': 'Company reduction by FY2030',
-                'tier': 2,  # Changed from Tier 3
+                'tier': 2,
                 'max_pts': 5,
-                'manual_review': True,  # Now requires manual review
+                'manual_review': True,
                 'review_criteria': 'Review company reduction target - Graded curve applies',
                 'score_func': score_tab4_q3_curve,
-                'is_curve': True  # Flag for curve scoring
+                'is_curve': True
             },
             'Q4': {
-                'description': 'Reduction goal details/estimate',
-                'tier': 2,  # Changed from Tier 3
+                'description': 'Reduction goal estimate (if Q3=Not sure)',
+                'tier': 2,
                 'max_pts': 5,
-                'manual_review': True,  # Now requires manual review
-                'review_criteria': 'Verify clear number goal with year stated',
-                'score_func': score_tab4_q4_updated
+                'manual_review': True,
+                'review_criteria': 'Verify clear number goal with year (only scored if Q3=Not sure)',
+                'score_func': score_tab4_q4_conditional,
+                'depends_on': 'Q3'
             },
             'Q5a': {
                 'description': 'Apple overall reduction FY2030',
-                'tier': 1,  # Tier 1
+                'tier': 1,
                 'max_pts': 5,
-                'manual_review': True,  # Requires manual review
+                'manual_review': True,
                 'review_criteria': 'Review Apple-specific reduction target - Graded curve applies',
                 'score_func': score_tab4_q5a_curve,
                 'is_sub_row': True,
                 'sub_row_text': 'overall',
-                'is_curve': True  # Flag for curve scoring
+                'is_curve': True
             },
             'Q5b': {
                 'description': 'Apple Scope 1 reduction FY2030',
-                'tier': 2,  # Tier 2
+                'tier': 2,
                 'max_pts': 5,
                 'manual_review': True,
                 'review_criteria': 'Validate scope breakdown matches overall',
@@ -706,7 +694,7 @@ def get_scoring_rules():
             },
             'Q5c': {
                 'description': 'Apple Scope 2 reduction FY2030',
-                'tier': 2,  # Tier 2
+                'tier': 2,
                 'max_pts': 5,
                 'manual_review': True,
                 'review_criteria': 'Validate scope breakdown matches overall',
@@ -717,7 +705,7 @@ def get_scoring_rules():
             },
             'Q5d': {
                 'description': 'Apple Scope 3 reduction FY2030',
-                'tier': 2,  # Tier 2
+                'tier': 2,
                 'max_pts': 5,
                 'manual_review': True,
                 'review_criteria': 'Validate scope breakdown matches overall',
@@ -736,9 +724,6 @@ def get_scoring_rules():
             },
         }},
         
-        # =====================================================================
-        # TAB 5: CARBON CREDITS (Section 4)
-        # =====================================================================
         'tab5': {'name': 'Carbon Credits', 'section': 4, 'questions': {
             'Q1': {
                 'description': 'Carbon credits in strategy',
@@ -781,9 +766,6 @@ def get_scoring_rules():
             },
         }},
         
-        # =====================================================================
-        # TAB 6: AIR FREIGHT (Section 5) - Conditional on Air service
-        # =====================================================================
         'tab6': {'name': 'Air Freight', 'section': 5, 'conditional': 'Air', 'questions': {
             'Q1': {
                 'description': 'Air strategies',
@@ -821,9 +803,6 @@ def get_scoring_rules():
             },
         }},
         
-        # =====================================================================
-        # TAB 7: OCEAN FREIGHT (Section 6) - Conditional on Ocean service
-        # =====================================================================
         'tab7': {'name': 'Ocean Freight', 'section': 6, 'conditional': 'Ocean', 'questions': {
             'Q1': {
                 'description': 'Ocean strategies',
@@ -879,9 +858,6 @@ def get_scoring_rules():
             },
         }},
         
-        # =====================================================================
-        # TAB 8: GROUND FREIGHT (Section 7) - Conditional on Ground service
-        # =====================================================================
         'tab8': {'name': 'Ground Freight', 'section': 7, 'conditional': 'Ground', 'questions': {
             'Q1': {
                 'description': 'Ground strategies',
@@ -1081,7 +1057,6 @@ def validate_scope_totals(sheet, results, carrier):
         val = results.get(q_key, {}).get('value', '')
         return extract_number(val)
     
-    # Company emissions validation (Q9 = Q10 + Q11 + Q12)
     q9_val = get_val('Q9')
     q10_val = get_val('Q10')
     q11_val = get_val('Q11')
@@ -1091,7 +1066,6 @@ def validate_scope_totals(sheet, results, carrier):
         scope_vals = [q10_val, q11_val, q12_val]
         if all(v is not None for v in scope_vals):
             scope_sum = sum(v for v in scope_vals)
-            
             likely_percentages = all(v <= 100 for v in scope_vals) and scope_sum <= 150
             
             if likely_percentages:
@@ -1123,7 +1097,6 @@ def validate_scope_totals(sheet, results, carrier):
                         'severity': 'warning'
                     })
     
-    # Apple emissions validation (Q13 = Q14 + Q15 + Q16)
     q13_val = get_val('Q13')
     q14_val = get_val('Q14')
     q15_val = get_val('Q15')
@@ -1133,7 +1106,6 @@ def validate_scope_totals(sheet, results, carrier):
         apple_scope_vals = [q14_val, q15_val, q16_val]
         if all(v is not None for v in apple_scope_vals):
             apple_scope_sum = sum(v for v in apple_scope_vals)
-            
             likely_percentages = all(v <= 100 for v in apple_scope_vals) and apple_scope_sum <= 150
             
             if likely_percentages:
@@ -1165,7 +1137,6 @@ def validate_scope_totals(sheet, results, carrier):
                         'severity': 'warning'
                     })
     
-    # Apple total should not exceed Company total
     if q13_val and q9_val and q13_val > q9_val:
         manual_items.append({
             'tab': 'Emissions Baseline',
@@ -1182,7 +1153,7 @@ def validate_scope_totals(sheet, results, carrier):
     return manual_items
 
 def validate_q5_reduction_scopes(results, carrier):
-    """Validate Q5b+Q5c+Q5d scope breakdowns against Q5a overall for Reduction Targets"""
+    """Validate Q5b+Q5c+Q5d scope breakdowns against Q5a overall"""
     manual_items = []
     
     def get_val(q_key):
@@ -1224,7 +1195,7 @@ def score_tab(sheets, tab_key, tab_rules, all_rules):
         'max_raw': 0,
         'max_weighted': 0,
         'manual_review_items': [],
-        'curve_data': {}  # Store data for curve scoring
+        'curve_data': {}
     }
     
     sheet = find_sheet_for_tab(sheets, tab_rules['name'], tab_rules['section'])
@@ -1241,13 +1212,11 @@ def score_tab(sheets, tab_key, tab_rules, all_rules):
         
         condition = q_rules.get('condition')
         
-        # Call scoring function
         if 'depends_on' in q_rules:
             result = q_rules['score_func'](value, depends_value=depends_value, condition=condition)
         else:
             result = q_rules['score_func'](value)
         
-        # Handle curve scoring functions that return 3 values
         if isinstance(result, tuple) and len(result) == 3:
             score, justification, curve_value = result
             if curve_value is not None:
@@ -1285,7 +1254,8 @@ def score_tab(sheets, tab_key, tab_rules, all_rules):
             tab_results['max_raw'] += q_rules['max_pts']
             tab_results['max_weighted'] += max_weighted
         
-        if q_rules.get('manual_review') and (score > 0 or q_rules.get('is_curve')):
+        # Add to manual review if flagged - include items with score 0 that need review
+        if q_rules.get('manual_review'):
             tab_results['manual_review_items'].append({
                 'tab': tab_rules['name'],
                 'question': q_key,
@@ -1321,7 +1291,7 @@ def score_carrier(excel_file, carrier_name=None):
         'total_weighted': 0,
         'max_raw': 0,
         'max_weighted': 0,
-        'curve_data': {}  # Aggregate curve data
+        'curve_data': {}
     }
     
     for tab_key, tab_rules in rules.items():
@@ -1336,11 +1306,9 @@ def score_carrier(excel_file, carrier_name=None):
         results['max_weighted'] += tab_results['max_weighted']
         results['manual_review_items'].extend(tab_results['manual_review_items'])
         
-        # Collect curve data
         if tab_results.get('curve_data'):
             results['curve_data'][tab_key] = tab_results['curve_data']
     
-    # Add scope validation for Emissions Baseline
     if 'tab3' in results['tabs']:
         validation_items = validate_scope_totals(
             find_sheet_for_tab(sheets, 'Emissions Baseline', 2),
@@ -1349,7 +1317,6 @@ def score_carrier(excel_file, carrier_name=None):
         )
         results['manual_review_items'].extend(validation_items)
     
-    # Add Q5 reduction scope validation for Reduction Targets
     if 'tab4' in results['tabs']:
         validation_items = validate_q5_reduction_scopes(
             results['tabs']['tab4']['questions'],
@@ -1367,11 +1334,7 @@ def score_carrier(excel_file, carrier_name=None):
 # =============================================================================
 
 def calculate_curve_scores(all_results, question_key, tab_key='tab4'):
-    """
-    Calculate graded curve scores based on all carrier responses.
-    Returns a dict mapping carrier_name -> curved_score
-    """
-    # Collect all values for this question
+    """Calculate graded curve scores based on all carrier responses."""
     values = []
     for carrier_name, results in all_results.items():
         if tab_key in results.get('tabs', {}):
@@ -1384,21 +1347,16 @@ def calculate_curve_scores(all_results, question_key, tab_key='tab4'):
     if not values:
         return {}
     
-    # Sort by value (higher is better for reduction targets)
     sorted_values = sorted(values, key=lambda x: x[1], reverse=True)
-    
-    # Assign scores based on percentile ranking
     n = len(sorted_values)
     curved_scores = {}
     
     for i, (carrier_name, val) in enumerate(sorted_values):
-        # Calculate percentile (0 to 1)
         if n == 1:
             percentile = 1.0
         else:
             percentile = 1 - (i / (n - 1))
         
-        # Map to 0-5 score
         if percentile >= 0.8:
             score = 5
         elif percentile >= 0.6:
@@ -1421,7 +1379,7 @@ def calculate_curve_scores(all_results, question_key, tab_key='tab4'):
     return curved_scores
 
 # =============================================================================
-# CLI TEST (Optional)
+# CLI TEST
 # =============================================================================
 
 if __name__ == "__main__":
@@ -1441,13 +1399,5 @@ if __name__ == "__main__":
             print(f"Raw Score: {results['total_raw']}/{results['max_raw']} ({results['raw_percentage']}%)")
             print(f"Weighted Score: {results['total_weighted']}/{results['max_weighted']} ({results['weighted_percentage']}%)")
             print(f"\nManual Review Items: {len(results['manual_review_items'])}")
-            print(f"Curve Data: {results.get('curve_data', {})}")
-            
-            for tab_key, tab_data in results['tabs'].items():
-                print(f"\n--- {tab_data['name']} ---")
-                for q_key, q_data in tab_data['questions'].items():
-                    status = "[UNSCORED]" if q_data.get('unscored') else f"{q_data['raw_score']}/{q_data['max_pts']}"
-                    curve_flag = " [CURVE]" if q_data.get('is_curve') else ""
-                    print(f"  {q_key}: {status}{curve_flag} - {q_data['justification'][:50]}")
     else:
         print("Usage: python scoring_engine.py <excel_file> [carrier_name]")
