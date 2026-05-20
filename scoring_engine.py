@@ -1,6 +1,6 @@
 # =============================================================================
 # SCORING ENGINE - Sustainability Transport Supplier Scorecard
-# Version 2.4 - Updated Carbon Credits scoring
+# Version 2.5 - Updated Air Freight scoring
 # =============================================================================
 
 import pandas as pd
@@ -359,7 +359,7 @@ def score_tab4_q6(value, **kwargs):
     return 0, "No ramp plan identified"
 
 # =============================================================================
-# TAB 5: CARBON CREDITS SCORING FUNCTIONS (UPDATED)
+# TAB 5: CARBON CREDITS SCORING FUNCTIONS
 # =============================================================================
 
 def score_tab5_q1(value, **kwargs):
@@ -401,7 +401,6 @@ def score_tab5_q4_quality(value, **kwargs):
     if len(v) < 5:
         return 0, f"Response too short - 0 pts (Manual review required)"
     
-    # Quality check keywords
     quality_keywords = ['gold standard', 'verra', 'verified', 'certified', 'third-party', 
                        'third party', 'iso', 'registry', 'standard', 'accredited', 
                        'audited', 'validation', 'verification', 'quality', 'premium']
@@ -425,7 +424,6 @@ def score_tab5_q5_approach(value, **kwargs):
     if len(v) < 5:
         return 0, f"Response too short - 0 pts (Manual review required)"
     
-    # Approach quality keywords
     approach_keywords = ['reduce', 'reduction', 'offset', 'invest', 'purchase', 'retire',
                         'transition', 'phase', 'timeline', 'plan', 'strategy', 'goal',
                         'target', 'commit', 'renewable', 'sustainable', 'decarbonize']
@@ -478,6 +476,30 @@ def score_tab6_q1(value, **kwargs):
     elif 'other' in v:
         return 1, "Only Others"
     return 0, f"No valid strategy: {value}"
+
+def score_tab6_q4_apple_saf(value, **kwargs):
+    """Q4: Apple SAF strategy - Tier 1, flagged for manual review"""
+    if is_blank(value):
+        return 0, "Blank response - 0 pts (Manual review required)"
+    
+    v = str(value).lower().strip()
+    if v in ['false', 'true', 'n/a', 'na', 'not applicable']:
+        return 0, f"Invalid response: {value} - 0 pts (Manual review required)"
+    
+    if len(v) < 5:
+        return 0, f"Response too short - 0 pts (Manual review required)"
+    
+    # SAF quality keywords
+    saf_keywords = ['saf', 'sustainable aviation fuel', 'biofuel', 'blend', 'percentage', 
+                   'commitment', 'purchase', 'agreement', 'supplier', 'target', 'goal',
+                   'increase', 'reduce', 'emission', 'carbon']
+    
+    has_saf_indicator = any(kw in v for kw in saf_keywords)
+    
+    if has_saf_indicator:
+        return 5, f"SAF strategy with key indicators - 5 pts (Manual review required): {str(value)[:100]}"
+    else:
+        return 5, f"Strategy response provided - 5 pts (Manual review required): {str(value)[:100]}"
 
 # =============================================================================
 # TAB 7: OCEAN FREIGHT SCORING FUNCTIONS
@@ -774,9 +796,6 @@ def get_scoring_rules():
             },
         }},
         
-        # =====================================================================
-        # TAB 5: CARBON CREDITS (Section 4) - UPDATED
-        # =====================================================================
         'tab5': {'name': 'Carbon Credits', 'section': 4, 'questions': {
             'Q1': {
                 'description': 'Carbon credits in strategy',
@@ -821,6 +840,10 @@ def get_scoring_rules():
             },
         }},
         
+        # =====================================================================
+        # TAB 6: AIR FREIGHT (Section 5) - UPDATED
+        # Conditional on Air service - carriers without Air won't be penalized
+        # =====================================================================
         'tab6': {'name': 'Air Freight', 'section': 5, 'conditional': 'Air', 'questions': {
             'Q1': {
                 'description': 'Air strategies',
@@ -835,7 +858,7 @@ def get_scoring_rules():
                 'tier': 3,
                 'max_pts': 2,
                 'manual_review': True,
-                'review_criteria': 'Verify',
+                'review_criteria': 'Verify other air strategies',
                 'score_func': score_conditional_text_2pts,
                 'depends_on': 'Q1',
                 'condition': 'Others'
@@ -844,17 +867,16 @@ def get_scoring_rules():
                 'description': 'SAF strategy',
                 'tier': 2,
                 'max_pts': 5,
-                'manual_review': True,
-                'review_criteria': 'Review SAF',
+                'manual_review': False,  # CHANGED: No longer flagged for manual review
                 'score_func': score_completion_text
             },
             'Q4': {
                 'description': 'Apple SAF strategy',
-                'tier': 2,
+                'tier': 1,  # CHANGED: Now Tier 1 (was Tier 2)
                 'max_pts': 5,
-                'manual_review': True,
-                'review_criteria': 'Review Apple SAF',
-                'score_func': score_completion_text
+                'manual_review': True,  # Flagged for manual review
+                'review_criteria': 'Review Apple-specific SAF strategy and commitments',
+                'score_func': score_tab6_q4_apple_saf
             },
         }},
         
@@ -974,6 +996,7 @@ def get_scoring_rules():
 # =============================================================================
 
 def detect_services(sheets):
+    """Detect which services (Air, Ocean, Ground) the carrier provides for Apple"""
     services = set()
     for name, df in sheets.items():
         s = df.to_string().lower()
@@ -1349,6 +1372,7 @@ def score_carrier(excel_file, carrier_name=None):
     }
     
     for tab_key, tab_rules in rules.items():
+        # Skip conditional sections if service not provided
         if 'conditional' in tab_rules and tab_rules['conditional'] not in services:
             continue
         
