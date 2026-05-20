@@ -85,23 +85,21 @@ if st.session_state.results:
             tab_data.append({'Section': tab_res['name'], 'Score': f"{tab_res['raw_score']}/{tab_res['max_raw']}", '%': f"{pct}%", 'Status': status})
         st.dataframe(pd.DataFrame(tab_data), hide_index=True, use_container_width=True)
         
-        st.subheader("📝 Question Details")
+                st.subheader("📝 Question Details")
         for tab_key, tab_res in res.get('tabs', {}).items():
             with st.expander(f"📁 {tab_res['name']}"):
                 for q_key, q_data in tab_res.get('questions', {}).items():
-    # Handle unscored questions (tier is None)
-    if q_data.get('unscored') or q_data.get('tier') is None:
-        tier_icon = "⚪"
-        tier_label = "Unscored"
-    else:
-        tier_icon = "🔴" if q_data['tier'] == 1 else "🟡" if q_data['tier'] == 2 else "🟢"
-        tier_label = f"Tier {q_data['tier']}"
-    
-    st.markdown(f"**{q_key}**: {q_data['description']} {tier_icon} {tier_label}")
-    st.write(f"Score: **{q_data['raw_score']}/{q_data['max_pts']}**")
-    if q_data.get('value'):
-        st.caption(f"Response: {q_data['value'][:150]}...")
-    st.divider()
+                    if q_data.get('unscored') or q_data.get('tier') is None:
+                        tier_icon = "⚪"
+                        tier_label = "Unscored"
+                    else:
+                        tier_icon = "🔴" if q_data['tier'] == 1 else "🟡" if q_data['tier'] == 2 else "🟢"
+                        tier_label = f"Tier {q_data['tier']}"
+                    st.markdown(f"**{q_key}**: {q_data['description']} {tier_icon} {tier_label}")
+                    st.write(f"Score: **{q_data['raw_score']}/{q_data['max_pts']}** | {q_data['justification']}")
+                    if q_data.get('value'):
+                        st.caption(f"Response: {q_data['value'][:150]}...")
+                    st.divider()
  | {q_data['justification']}")
                     if q_data['value']:
                         st.caption(f"Response: {q_data['value'][:150]}...")
