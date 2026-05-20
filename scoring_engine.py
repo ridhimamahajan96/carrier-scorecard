@@ -1,6 +1,6 @@
 # =============================================================================
 # SCORING ENGINE - Sustainability Transport Supplier Scorecard
-# Version 2.3 - Fixed Q4 conditional scoring
+# Version 2.4 - Updated Carbon Credits scoring
 # =============================================================================
 
 import pandas as pd
@@ -359,22 +359,24 @@ def score_tab4_q6(value, **kwargs):
     return 0, "No ramp plan identified"
 
 # =============================================================================
-# TAB 5: CARBON CREDITS SCORING FUNCTIONS
+# TAB 5: CARBON CREDITS SCORING FUNCTIONS (UPDATED)
 # =============================================================================
 
 def score_tab5_q1(value, **kwargs):
+    """Q1: Carbon credits in strategy - No = 0 pts, Blank = 0 pts"""
     if is_blank(value):
-        return 0, "Blank response"
+        return 0, "Blank response - 0 pts"
     v = str(value).lower().strip()
     if v == 'yes':
         return 5, "Yes - carbon credits in strategy"
-    elif 'development' in v:
+    elif 'development' in v or 'in progress' in v:
         return 3, "In development"
     elif v == 'no':
-        return 2, "No carbon credits"
-    return 0, f"Unrecognized: {value}"
+        return 0, "No carbon credits strategy - 0 pts"
+    return 0, f"Unrecognized response: {value} - 0 pts"
 
 def score_tab5_q2(value, **kwargs):
+    """Q2: Credit instruments"""
     if is_blank(value):
         return 0, "Blank response"
     v = str(value).lower()
@@ -386,6 +388,54 @@ def score_tab5_q2(value, **kwargs):
     elif 'other' in v:
         return 2, "Only Others"
     return 0, f"No valid instruments: {value}"
+
+def score_tab5_q4_quality(value, **kwargs):
+    """Q4: Quality of credits - Auto 5 if text provided, 0 if blank, flag for manual review"""
+    if is_blank(value):
+        return 0, "No response provided - 0 pts (Manual review required)"
+    
+    v = str(value).lower().strip()
+    if v in ['false', 'true', 'n/a', 'na', 'not applicable']:
+        return 0, f"Invalid response: {value} - 0 pts (Manual review required)"
+    
+    if len(v) < 5:
+        return 0, f"Response too short - 0 pts (Manual review required)"
+    
+    # Quality check keywords
+    quality_keywords = ['gold standard', 'verra', 'verified', 'certified', 'third-party', 
+                       'third party', 'iso', 'registry', 'standard', 'accredited', 
+                       'audited', 'validation', 'verification', 'quality', 'premium']
+    
+    has_quality_indicator = any(kw in v for kw in quality_keywords)
+    
+    if has_quality_indicator:
+        return 5, f"Quality indicators found - 5 pts (Manual review required): {str(value)[:100]}"
+    else:
+        return 5, f"Text response provided - 5 pts (Manual review required to verify quality): {str(value)[:100]}"
+
+def score_tab5_q5_approach(value, **kwargs):
+    """Q5: Near-term approach - Auto 5 if text provided, 0 if blank, flag for manual review"""
+    if is_blank(value):
+        return 0, "No response provided - 0 pts (Manual review required)"
+    
+    v = str(value).lower().strip()
+    if v in ['false', 'true', 'n/a', 'na', 'not applicable']:
+        return 0, f"Invalid response: {value} - 0 pts (Manual review required)"
+    
+    if len(v) < 5:
+        return 0, f"Response too short - 0 pts (Manual review required)"
+    
+    # Approach quality keywords
+    approach_keywords = ['reduce', 'reduction', 'offset', 'invest', 'purchase', 'retire',
+                        'transition', 'phase', 'timeline', 'plan', 'strategy', 'goal',
+                        'target', 'commit', 'renewable', 'sustainable', 'decarbonize']
+    
+    has_approach_indicator = any(kw in v for kw in approach_keywords)
+    
+    if has_approach_indicator:
+        return 5, f"Clear approach described - 5 pts (Manual review required): {str(value)[:100]}"
+    else:
+        return 5, f"Text response provided - 5 pts (Manual review required to verify approach): {str(value)[:100]}"
 
 def score_conditional_text(value, depends_value=None, condition=None, **kwargs):
     if depends_value is None:
@@ -724,6 +774,9 @@ def get_scoring_rules():
             },
         }},
         
+        # =====================================================================
+        # TAB 5: CARBON CREDITS (Section 4) - UPDATED
+        # =====================================================================
         'tab5': {'name': 'Carbon Credits', 'section': 4, 'questions': {
             'Q1': {
                 'description': 'Carbon credits in strategy',
@@ -745,7 +798,7 @@ def get_scoring_rules():
                 'tier': 3,
                 'max_pts': 3,
                 'manual_review': True,
-                'review_criteria': 'Verify strategy',
+                'review_criteria': 'Verify strategy explanation',
                 'score_func': score_conditional_text,
                 'depends_on': 'Q2',
                 'condition': 'Others'
@@ -754,15 +807,17 @@ def get_scoring_rules():
                 'description': 'Quality of credits',
                 'tier': 2,
                 'max_pts': 5,
-                'manual_review': False,
-                'score_func': score_completion_text
+                'manual_review': True,
+                'review_criteria': 'Verify quality standards and certifications mentioned',
+                'score_func': score_tab5_q4_quality
             },
             'Q5': {
                 'description': 'Near-term approach',
                 'tier': 2,
                 'max_pts': 5,
-                'manual_review': False,
-                'score_func': score_completion_text
+                'manual_review': True,
+                'review_criteria': 'Verify near-term carbon credit strategy is clear and actionable',
+                'score_func': score_tab5_q5_approach
             },
         }},
         
@@ -1254,7 +1309,6 @@ def score_tab(sheets, tab_key, tab_rules, all_rules):
             tab_results['max_raw'] += q_rules['max_pts']
             tab_results['max_weighted'] += max_weighted
         
-        # Add to manual review if flagged - include items with score 0 that need review
         if q_rules.get('manual_review'):
             tab_results['manual_review_items'].append({
                 'tab': tab_rules['name'],
