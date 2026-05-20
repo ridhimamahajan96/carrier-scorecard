@@ -1,7 +1,16 @@
+# =============================================================================
+# SCORING ENGINE - Sustainability Transport Supplier Scorecard
+# Version 2.1 - Updated Emissions Baseline Rules
+# =============================================================================
+
 import pandas as pd
 import re
 
 TIER_WEIGHTS = {1: 3, 2: 2, 3: 1}
+
+# =============================================================================
+# UTILITY FUNCTIONS
+# =============================================================================
 
 def is_blank(value):
     if value is None:
@@ -34,6 +43,10 @@ def extract_number(value):
             except:
                 pass
     return None
+
+# =============================================================================
+# GENERIC SCORING FUNCTIONS
+# =============================================================================
 
 def score_completion_numeric(value, **kwargs):
     if is_blank(value):
@@ -79,7 +92,16 @@ def score_completion_text(value, **kwargs):
         return 0, f"Response too short: {value}"
     return 5, f"Response: {str(value)[:100]}"
 
+def score_unscored(value, **kwargs):
+    """Scoring function for unscored questions - always returns 0"""
+    return 0, "Unscored - informational only"
+
+# =============================================================================
+# TAB 3: EMISSIONS BASELINE SCORING FUNCTIONS
+# =============================================================================
+
 def score_tab3_q4(value, **kwargs):
+    """Q4: GHG reporting frameworks - Tier 2, not sure = 0 pts"""
     if is_blank(value):
         return 0, "Blank response"
     v = str(value).lower()
@@ -94,6 +116,7 @@ def score_tab3_q4(value, **kwargs):
     return 0, f"No valid framework: {value}"
 
 def score_tab3_q5(value, depends_value=None, **kwargs):
+    """Q5: Conditional - 2 pts if Q4='not sure' and explanation provided, flagged for manual review"""
     if depends_value is None:
         return 0, "Q4 value not available"
     q4_lower = str(depends_value).lower() if depends_value else ''
@@ -109,6 +132,7 @@ def score_tab3_q5(value, depends_value=None, **kwargs):
     return 2, f"Explanation provided (needs manual review): {str(value)[:100]}"
 
 def score_tab3_q6(value, **kwargs):
+    """Q6: Emissions reporting boundary - Tier 2, not sure = 0 pts"""
     if is_blank(value):
         return 0, "Blank response"
     v = str(value).lower()
@@ -124,6 +148,7 @@ def score_tab3_q6(value, **kwargs):
     return 0, f"No valid boundary: {value}"
 
 def score_tab3_q7(value, **kwargs):
+    """Q7: Unit for reporting - Tier 2, CO2e=5, CO2=3, Both=5, no response=0"""
     if is_blank(value):
         return 0, "Blank response"
     v = str(value).lower()
@@ -138,6 +163,7 @@ def score_tab3_q7(value, **kwargs):
     return 0, f"No valid unit: {value}"
 
 def score_tab3_q8(value, **kwargs):
+    """Q8: Scopes included - Tier 1"""
     if is_blank(value):
         return 0, "Blank response"
     v = str(value).lower()
@@ -157,6 +183,10 @@ def score_tab3_q8(value, **kwargs):
     elif count == 1:
         return 3, f"1 scope: {value}"
     return 0, f"No scopes identified: {value}"
+
+# =============================================================================
+# TAB 4: REDUCTION TARGETS SCORING FUNCTIONS
+# =============================================================================
 
 def score_tab4_q1(value, **kwargs):
     if is_blank(value):
@@ -193,8 +223,8 @@ def score_tab4_q3(value, **kwargs):
         return 0, "Not sure selected"
     return 5, f"Reduction target: {value}"
 
-def score_tab4_q4(value, q3_value=None, **kwargs):
-    if q3_value is None or 'not sure' not in str(q3_value).lower():
+def score_tab4_q4(value, depends_value=None, **kwargs):
+    if depends_value is None or 'not sure' not in str(depends_value).lower():
         return 0, "N/A - Q3 was not Not sure"
     if is_blank(value):
         return 0, "No estimate provided"
@@ -236,6 +266,10 @@ def score_tab4_q6(value, **kwargs):
     if nums:
         return 5, f"Ramp plan provided: {value}"
     return 0, "No ramp plan identified"
+
+# =============================================================================
+# TAB 5: CARBON CREDITS SCORING FUNCTIONS
+# =============================================================================
 
 def score_tab5_q1(value, **kwargs):
     if is_blank(value):
@@ -286,6 +320,10 @@ def score_conditional_text_2pts(value, depends_value=None, condition=None, **kwa
         return 0, "No explanation provided"
     return 2, f"Explanation provided: {str(value)[:50]}"
 
+# =============================================================================
+# TAB 6: AIR FREIGHT SCORING FUNCTIONS
+# =============================================================================
+
 def score_tab6_q1(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
@@ -299,6 +337,10 @@ def score_tab6_q1(value, **kwargs):
     elif 'other' in v:
         return 1, "Only Others"
     return 0, f"No valid strategy: {value}"
+
+# =============================================================================
+# TAB 7: OCEAN FREIGHT SCORING FUNCTIONS
+# =============================================================================
 
 def score_tab7_q1(value, **kwargs):
     if is_blank(value):
@@ -324,6 +366,10 @@ def score_tab7_q3(value, **kwargs):
         return 1, "Only Others"
     return 0, f"No valid fuel: {value}"
 
+# =============================================================================
+# TAB 8: GROUND FREIGHT SCORING FUNCTIONS
+# =============================================================================
+
 def score_tab8_q1(value, **kwargs):
     if is_blank(value):
         return 0, "Blank response"
@@ -348,57 +394,418 @@ def score_tab8_q3(value, **kwargs):
         return 1, "Only Others"
     return 0, f"No valid fuel: {value}"
 
+# =============================================================================
+# SCORING RULES CONFIGURATION
+# =============================================================================
+
 def get_scoring_rules():
     return {
+        # =====================================================================
+        # TAB 3: EMISSIONS BASELINE (Section 2)
+        # =====================================================================
         'tab3': {'name': 'Emissions Baseline', 'section': 2, 'questions': {
-            'Q4': {'description': 'GHG reporting frameworks', 'tier': 2, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab3_q4, 'is_checkbox': True},
-            'Q5': {'description': 'Explain if Not sure/None', 'tier': 3, 'max_pts': 2, 'manual_review': True, 'review_criteria': 'Verify explanation of GHG framework approach', 'score_func': score_tab3_q5, 'depends_on': 'Q4'},
-            'Q6': {'description': 'Emissions reporting boundary', 'tier': 2, 'max_pts': 7, 'manual_review': False, 'score_func': score_tab3_q6, 'is_checkbox': True},
-            'Q7': {'description': 'Unit for reporting', 'tier': 2, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab3_q7, 'is_checkbox': True},
-            'Q8': {'description': 'Scopes included', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab3_q8, 'is_checkbox': True},
-            'Q9': {'description': 'Company total GHG FY2025', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_numeric, 'is_total': True, 'total_group': 'company'},
-            'Q10': {'description': 'Company Scope 1', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_numeric, 'is_scope': True, 'total_group': 'company'},
-            'Q11': {'description': 'Company Scope 2', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_numeric, 'is_scope': True, 'total_group': 'company'},
-            'Q12': {'description': 'Company Scope 3', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_numeric, 'is_scope': True, 'total_group': 'company'},
-            'Q13': {'description': 'Apple total emissions', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_numeric, 'is_total': True, 'total_group': 'apple'},
-            'Q14': {'description': 'Apple Scope 1', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_numeric, 'is_scope': True, 'total_group': 'apple'},
-            'Q15': {'description': 'Apple Scope 2', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_numeric, 'is_scope': True, 'total_group': 'apple'},
-            'Q16': {'description': 'Apple Scope 3', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_numeric, 'is_scope': True, 'total_group': 'apple'},
-            'Q17': {'description': 'Methodology for allocation', 'tier': 3, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_text},
-            'Q19': {'description': 'Third-party verification', 'tier': 3, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_text}}},
+            'Q4': {
+                'description': 'GHG reporting frameworks',
+                'tier': 2,
+                'max_pts': 5,
+                'manual_review': False,
+                'score_func': score_tab3_q4,
+                'is_checkbox': True
+            },
+            'Q5': {
+                'description': 'Explain if Not sure/None',
+                'tier': 3,
+                'max_pts': 2,
+                'manual_review': True,
+                'review_criteria': 'Verify explanation of GHG framework approach',
+                'score_func': score_tab3_q5,
+                'depends_on': 'Q4'
+            },
+            'Q6': {
+                'description': 'Emissions reporting boundary',
+                'tier': 2,
+                'max_pts': 7,
+                'manual_review': False,
+                'score_func': score_tab3_q6,
+                'is_checkbox': True
+            },
+            'Q7': {
+                'description': 'Unit for reporting',
+                'tier': 2,
+                'max_pts': 5,
+                'manual_review': False,
+                'score_func': score_tab3_q7,
+                'is_checkbox': True
+            },
+            'Q8': {
+                'description': 'Scopes included',
+                'tier': 1,
+                'max_pts': 5,
+                'manual_review': False,
+                'score_func': score_tab3_q8,
+                'is_checkbox': True
+            },
+            'Q9': {
+                'description': 'Company total GHG FY2025',
+                'tier': 1,
+                'max_pts': 5,
+                'manual_review': False,
+                'score_func': score_completion_numeric,
+                'is_total': True,
+                'total_group': 'company'
+            },
+            'Q10': {
+                'description': 'Company Scope 1',
+                'tier': 1,
+                'max_pts': 5,
+                'manual_review': False,
+                'score_func': score_completion_numeric,
+                'is_scope': True,
+                'total_group': 'company'
+            },
+            'Q11': {
+                'description': 'Company Scope 2',
+                'tier': 1,
+                'max_pts': 5,
+                'manual_review': False,
+                'score_func': score_completion_numeric,
+                'is_scope': True,
+                'total_group': 'company'
+            },
+            'Q12': {
+                'description': 'Company Scope 3',
+                'tier': 1,
+                'max_pts': 5,
+                'manual_review': False,
+                'score_func': score_completion_numeric,
+                'is_scope': True,
+                'total_group': 'company'
+            },
+            'Q13': {
+                'description': 'Apple total emissions',
+                'tier': 1,
+                'max_pts': 5,
+                'manual_review': False,
+                'score_func': score_completion_numeric,
+                'is_total': True,
+                'total_group': 'apple'
+            },
+            'Q14': {
+                'description': 'Apple Scope 1',
+                'tier': 1,
+                'max_pts': 5,
+                'manual_review': False,
+                'score_func': score_completion_numeric,
+                'is_scope': True,
+                'total_group': 'apple'
+            },
+            'Q15': {
+                'description': 'Apple Scope 2',
+                'tier': 1,
+                'max_pts': 5,
+                'manual_review': False,
+                'score_func': score_completion_numeric,
+                'is_scope': True,
+                'total_group': 'apple'
+            },
+            'Q16': {
+                'description': 'Apple Scope 3',
+                'tier': 1,
+                'max_pts': 5,
+                'manual_review': False,
+                'score_func': score_completion_numeric,
+                'is_scope': True,
+                'total_group': 'apple'
+            },
+            'Q17': {
+                'description': 'Methodology for allocation',
+                'tier': 3,
+                'max_pts': 5,
+                'manual_review': False,
+                'score_func': score_completion_text
+            },
+            'Q18': {
+                'description': 'Allocation methodology details',
+                'tier': None,
+                'max_pts': 0,
+                'manual_review': False,
+                'score_func': score_unscored,
+                'unscored': True
+            },
+            'Q19': {
+                'description': 'Third-party verification',
+                'tier': 3,
+                'max_pts': 5,
+                'manual_review': False,
+                'score_func': score_completion_text
+            },
+            'Q20': {
+                'description': 'Verification details',
+                'tier': None,
+                'max_pts': 0,
+                'manual_review': False,
+                'score_func': score_unscored,
+                'unscored': True
+            },
+        }},
+        
+        # =====================================================================
+        # TAB 4: REDUCTION TARGETS (Section 3)
+        # =====================================================================
         'tab4': {'name': 'Reduction Targets', 'section': 3, 'questions': {
-            'Q1': {'description': 'Carbon neutrality goal', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab4_q1},
-            'Q2': {'description': 'Target year', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab4_q2},
-            'Q3': {'description': 'Company reduction by FY2030', 'tier': 3, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab4_q3},
-            'Q4': {'description': 'If Not sure - estimate', 'tier': 3, 'max_pts': 3, 'manual_review': False, 'score_func': score_tab4_q4, 'depends_on': 'Q3'},
-            'Q5a': {'description': 'Apple reduction FY2030', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab4_q5a, 'is_sub_row': True, 'sub_row_text': 'overall'},
-            'Q6': {'description': 'YoY ramp plan', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab4_q6, 'is_checkbox': True}}},
+            'Q1': {
+                'description': 'Carbon neutrality goal',
+                'tier': 1,
+                'max_pts': 5,
+                'manual_review': False,
+                'score_func': score_tab4_q1
+            },
+            'Q2': {
+                'description': 'Target year',
+                'tier': 1,
+                'max_pts': 5,
+                'manual_review': False,
+                'score_func': score_tab4_q2
+            },
+            'Q3': {
+                'description': 'Company reduction by FY2030',
+                'tier': 3,
+                'max_pts': 5,
+                'manual_review': False,
+                'score_func': score_tab4_q3
+            },
+            'Q4': {
+                'description': 'If Not sure - estimate',
+                'tier': 3,
+                'max_pts': 3,
+                'manual_review': False,
+                'score_func': score_tab4_q4,
+                'depends_on': 'Q3'
+            },
+            'Q5a': {
+                'description': 'Apple reduction FY2030',
+                'tier': 1,
+                'max_pts': 5,
+                'manual_review': False,
+                'score_func': score_tab4_q5a,
+                'is_sub_row': True,
+                'sub_row_text': 'overall'
+            },
+            'Q6': {
+                'description': 'YoY ramp plan',
+                'tier': 1,
+                'max_pts': 5,
+                'manual_review': False,
+                'score_func': score_tab4_q6,
+                'is_checkbox': True
+            },
+        }},
+        
+        # =====================================================================
+        # TAB 5: CARBON CREDITS (Section 4)
+        # =====================================================================
         'tab5': {'name': 'Carbon Credits', 'section': 4, 'questions': {
-            'Q1': {'description': 'Carbon credits in strategy', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab5_q1},
-            'Q2': {'description': 'Credit instruments', 'tier': 2, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab5_q2, 'is_checkbox': True},
-            'Q3': {'description': 'Explain Others', 'tier': 3, 'max_pts': 3, 'manual_review': True, 'review_criteria': 'Verify strategy', 'score_func': score_conditional_text, 'depends_on': 'Q2', 'condition': 'Others'},
-            'Q4': {'description': 'Quality of credits', 'tier': 2, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_text},
-            'Q5': {'description': 'Near-term approach', 'tier': 2, 'max_pts': 5, 'manual_review': False, 'score_func': score_completion_text}}},
+            'Q1': {
+                'description': 'Carbon credits in strategy',
+                'tier': 1,
+                'max_pts': 5,
+                'manual_review': False,
+                'score_func': score_tab5_q1
+            },
+            'Q2': {
+                'description': 'Credit instruments',
+                'tier': 2,
+                'max_pts': 5,
+                'manual_review': False,
+                'score_func': score_tab5_q2,
+                'is_checkbox': True
+            },
+            'Q3': {
+                'description': 'Explain Others',
+                'tier': 3,
+                'max_pts': 3,
+                'manual_review': True,
+                'review_criteria': 'Verify strategy',
+                'score_func': score_conditional_text,
+                'depends_on': 'Q2',
+                'condition': 'Others'
+            },
+            'Q4': {
+                'description': 'Quality of credits',
+                'tier': 2,
+                'max_pts': 5,
+                'manual_review': False,
+                'score_func': score_completion_text
+            },
+            'Q5': {
+                'description': 'Near-term approach',
+                'tier': 2,
+                'max_pts': 5,
+                'manual_review': False,
+                'score_func': score_completion_text
+            },
+        }},
+        
+        # =====================================================================
+        # TAB 6: AIR FREIGHT (Section 5) - Conditional on Air service
+        # =====================================================================
         'tab6': {'name': 'Air Freight', 'section': 5, 'conditional': 'Air', 'questions': {
-            'Q1': {'description': 'Air strategies', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab6_q1, 'is_checkbox': True},
-            'Q2': {'description': 'Explain Others', 'tier': 3, 'max_pts': 2, 'manual_review': True, 'review_criteria': 'Verify', 'score_func': score_conditional_text_2pts, 'depends_on': 'Q1', 'condition': 'Others'},
-            'Q3': {'description': 'SAF strategy', 'tier': 2, 'max_pts': 5, 'manual_review': True, 'review_criteria': 'Review SAF', 'score_func': score_completion_text},
-            'Q4': {'description': 'Apple SAF strategy', 'tier': 2, 'max_pts': 5, 'manual_review': True, 'review_criteria': 'Review Apple SAF', 'score_func': score_completion_text}}},
+            'Q1': {
+                'description': 'Air strategies',
+                'tier': 1,
+                'max_pts': 5,
+                'manual_review': False,
+                'score_func': score_tab6_q1,
+                'is_checkbox': True
+            },
+            'Q2': {
+                'description': 'Explain Others',
+                'tier': 3,
+                'max_pts': 2,
+                'manual_review': True,
+                'review_criteria': 'Verify',
+                'score_func': score_conditional_text_2pts,
+                'depends_on': 'Q1',
+                'condition': 'Others'
+            },
+            'Q3': {
+                'description': 'SAF strategy',
+                'tier': 2,
+                'max_pts': 5,
+                'manual_review': True,
+                'review_criteria': 'Review SAF',
+                'score_func': score_completion_text
+            },
+            'Q4': {
+                'description': 'Apple SAF strategy',
+                'tier': 2,
+                'max_pts': 5,
+                'manual_review': True,
+                'review_criteria': 'Review Apple SAF',
+                'score_func': score_completion_text
+            },
+        }},
+        
+        # =====================================================================
+        # TAB 7: OCEAN FREIGHT (Section 6) - Conditional on Ocean service
+        # =====================================================================
         'tab7': {'name': 'Ocean Freight', 'section': 6, 'conditional': 'Ocean', 'questions': {
-            'Q1': {'description': 'Ocean strategies', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab7_q1, 'is_checkbox': True},
-            'Q2': {'description': 'Explain Others', 'tier': 3, 'max_pts': 2, 'manual_review': True, 'review_criteria': 'Verify', 'score_func': score_conditional_text_2pts, 'depends_on': 'Q1', 'condition': 'Others'},
-            'Q3': {'description': 'Alternative fuels', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab7_q3, 'is_checkbox': True},
-            'Q4': {'description': 'Explain Others fuels', 'tier': 3, 'max_pts': 2, 'manual_review': True, 'review_criteria': 'Verify', 'score_func': score_conditional_text_2pts, 'depends_on': 'Q3', 'condition': 'Others'},
-            'Q5': {'description': 'Company fuel strategy', 'tier': 2, 'max_pts': 5, 'manual_review': True, 'review_criteria': 'Review', 'score_func': score_completion_text},
-            'Q6': {'description': 'Apple ocean strategy', 'tier': 2, 'max_pts': 5, 'manual_review': True, 'review_criteria': 'Review', 'score_func': score_completion_text}}},
+            'Q1': {
+                'description': 'Ocean strategies',
+                'tier': 1,
+                'max_pts': 5,
+                'manual_review': False,
+                'score_func': score_tab7_q1,
+                'is_checkbox': True
+            },
+            'Q2': {
+                'description': 'Explain Others',
+                'tier': 3,
+                'max_pts': 2,
+                'manual_review': True,
+                'review_criteria': 'Verify',
+                'score_func': score_conditional_text_2pts,
+                'depends_on': 'Q1',
+                'condition': 'Others'
+            },
+            'Q3': {
+                'description': 'Alternative fuels',
+                'tier': 1,
+                'max_pts': 5,
+                'manual_review': False,
+                'score_func': score_tab7_q3,
+                'is_checkbox': True
+            },
+            'Q4': {
+                'description': 'Explain Others fuels',
+                'tier': 3,
+                'max_pts': 2,
+                'manual_review': True,
+                'review_criteria': 'Verify',
+                'score_func': score_conditional_text_2pts,
+                'depends_on': 'Q3',
+                'condition': 'Others'
+            },
+            'Q5': {
+                'description': 'Company fuel strategy',
+                'tier': 2,
+                'max_pts': 5,
+                'manual_review': True,
+                'review_criteria': 'Review',
+                'score_func': score_completion_text
+            },
+            'Q6': {
+                'description': 'Apple ocean strategy',
+                'tier': 2,
+                'max_pts': 5,
+                'manual_review': True,
+                'review_criteria': 'Review',
+                'score_func': score_completion_text
+            },
+        }},
+        
+        # =====================================================================
+        # TAB 8: GROUND FREIGHT (Section 7) - Conditional on Ground service
+        # =====================================================================
         'tab8': {'name': 'Ground Freight', 'section': 7, 'conditional': 'Ground', 'questions': {
-            'Q1': {'description': 'Ground strategies', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab8_q1, 'is_checkbox': True},
-            'Q2': {'description': 'Explain Others', 'tier': 3, 'max_pts': 2, 'manual_review': True, 'review_criteria': 'Verify', 'score_func': score_conditional_text_2pts, 'depends_on': 'Q1', 'condition': 'Others'},
-            'Q3': {'description': 'Alternative fuels', 'tier': 1, 'max_pts': 5, 'manual_review': False, 'score_func': score_tab8_q3, 'is_checkbox': True},
-            'Q4': {'description': 'Explain Others fuels', 'tier': 3, 'max_pts': 2, 'manual_review': True, 'review_criteria': 'Verify', 'score_func': score_conditional_text_2pts, 'depends_on': 'Q3', 'condition': 'Others'},
-            'Q5': {'description': 'Company EV strategy', 'tier': 2, 'max_pts': 5, 'manual_review': True, 'review_criteria': 'Review', 'score_func': score_completion_text},
-            'Q6': {'description': 'Apple ground strategy', 'tier': 2, 'max_pts': 5, 'manual_review': True, 'review_criteria': 'Review', 'score_func': score_completion_text}}}
+            'Q1': {
+                'description': 'Ground strategies',
+                'tier': 1,
+                'max_pts': 5,
+                'manual_review': False,
+                'score_func': score_tab8_q1,
+                'is_checkbox': True
+            },
+            'Q2': {
+                'description': 'Explain Others',
+                'tier': 3,
+                'max_pts': 2,
+                'manual_review': True,
+                'review_criteria': 'Verify',
+                'score_func': score_conditional_text_2pts,
+                'depends_on': 'Q1',
+                'condition': 'Others'
+            },
+            'Q3': {
+                'description': 'Alternative fuels',
+                'tier': 1,
+                'max_pts': 5,
+                'manual_review': False,
+                'score_func': score_tab8_q3,
+                'is_checkbox': True
+            },
+            'Q4': {
+                'description': 'Explain Others fuels',
+                'tier': 3,
+                'max_pts': 2,
+                'manual_review': True,
+                'review_criteria': 'Verify',
+                'score_func': score_conditional_text_2pts,
+                'depends_on': 'Q3',
+                'condition': 'Others'
+            },
+            'Q5': {
+                'description': 'Company EV strategy',
+                'tier': 2,
+                'max_pts': 5,
+                'manual_review': True,
+                'review_criteria': 'Review',
+                'score_func': score_completion_text
+            },
+            'Q6': {
+                'description': 'Apple ground strategy',
+                'tier': 2,
+                'max_pts': 5,
+                'manual_review': True,
+                'review_criteria': 'Review',
+                'score_func': score_completion_text
+            },
+        }}
     }
+
+# =============================================================================
+# EXCEL EXTRACTION FUNCTIONS
+# =============================================================================
 
 def detect_services(sheets):
     services = set()
@@ -527,83 +934,121 @@ def extract_question_value(df, question_key, q_rules=None):
                         return val
     return None
 
+# =============================================================================
+# VALIDATION FUNCTIONS
+# =============================================================================
+
 def validate_scope_totals(sheet, results, carrier):
     """Validate that scope breakdowns total to reported total emissions"""
     manual_items = []
     
+    def get_val(q_key):
+        val = results.get(q_key, {}).get('value', '')
+        return extract_number(val)
+    
     # Company emissions validation (Q9 = Q10 + Q11 + Q12)
-    q9_val = extract_number(results.get('Q9', {}).get('value', ''))
-    q10_val = extract_number(results.get('Q10', {}).get('value', ''))
-    q11_val = extract_number(results.get('Q11', {}).get('value', ''))
-    q12_val = extract_number(results.get('Q12', {}).get('value', ''))
+    q9_val = get_val('Q9')
+    q10_val = get_val('Q10')
+    q11_val = get_val('Q11')
+    q12_val = get_val('Q12')
     
     if q9_val is not None and q9_val > 0:
-        if q10_val is not None and q11_val is not None and q12_val is not None:
-            scope_sum = q10_val + q11_val + q12_val
-            # Check if percentages (should sum to ~100)
-            if all(v <= 100 for v in [q10_val, q11_val, q12_val] if v > 0):
-                if abs(scope_sum - 100) > 5:  # Allow 5% tolerance
+        scope_vals = [q10_val, q11_val, q12_val]
+        if all(v is not None for v in scope_vals):
+            scope_sum = sum(v for v in scope_vals)
+            
+            likely_percentages = all(v <= 100 for v in scope_vals) and scope_sum <= 150
+            
+            if likely_percentages:
+                variance = abs(scope_sum - 100)
+                if variance > 5:
                     manual_items.append({
                         'tab': 'Emissions Baseline',
                         'question': 'Q9-Q12',
-                        'description': 'Company scope breakdown validation',
-                        'value': f"Total: {q9_val}, Scope1: {q10_val}, Scope2: {q11_val}, Scope3: {q12_val}, Sum: {scope_sum}",
+                        'description': 'Company scope breakdown validation (percentages)',
+                        'value': f"Q9 Total: {q9_val}, Scope1: {q10_val}%, Scope2: {q11_val}%, Scope3: {q12_val}%, Sum: {scope_sum}%",
                         'current_score': 0,
                         'max_score': 0,
-                        'review_criteria': 'Scope breakdowns (Q10+Q11+Q12) should total to 100% or match Q9 total',
-                        'justification': f'Scope sum ({scope_sum}) does not equal 100% - needs review'
+                        'review_criteria': 'Scope percentages (Q10+Q11+Q12) should total to 100%',
+                        'justification': f'Scope sum ({scope_sum:.1f}%) does not equal 100% (variance: {variance:.1f}%) - needs review',
+                        'severity': 'warning'
                     })
             else:
-                # Absolute values - should sum to Q9
-                if abs(scope_sum - q9_val) > (q9_val * 0.05):  # Allow 5% tolerance
+                variance_pct = abs(scope_sum - q9_val) / q9_val * 100 if q9_val > 0 else 0
+                if variance_pct > 5:
                     manual_items.append({
                         'tab': 'Emissions Baseline',
                         'question': 'Q9-Q12',
-                        'description': 'Company scope breakdown validation',
-                        'value': f"Total: {q9_val}, Scope1: {q10_val}, Scope2: {q11_val}, Scope3: {q12_val}, Sum: {scope_sum}",
+                        'description': 'Company scope breakdown validation (absolute)',
+                        'value': f"Q9 Total: {q9_val:,.0f}, Scope1: {q10_val:,.0f}, Scope2: {q11_val:,.0f}, Scope3: {q12_val:,.0f}, Sum: {scope_sum:,.0f}",
                         'current_score': 0,
                         'max_score': 0,
-                        'review_criteria': 'Scope breakdowns (Q10+Q11+Q12) should total to Q9',
-                        'justification': f'Scope sum ({scope_sum}) does not equal total ({q9_val}) - needs review'
+                        'review_criteria': 'Scope values (Q10+Q11+Q12) should total to Q9',
+                        'justification': f'Scope sum ({scope_sum:,.0f}) does not equal total ({q9_val:,.0f}) - {variance_pct:.1f}% variance - needs review',
+                        'severity': 'warning'
                     })
     
     # Apple emissions validation (Q13 = Q14 + Q15 + Q16)
-    q13_val = extract_number(results.get('Q13', {}).get('value', ''))
-    q14_val = extract_number(results.get('Q14', {}).get('value', ''))
-    q15_val = extract_number(results.get('Q15', {}).get('value', ''))
-    q16_val = extract_number(results.get('Q16', {}).get('value', ''))
+    q13_val = get_val('Q13')
+    q14_val = get_val('Q14')
+    q15_val = get_val('Q15')
+    q16_val = get_val('Q16')
     
     if q13_val is not None and q13_val > 0:
-        if q14_val is not None and q15_val is not None and q16_val is not None:
-            scope_sum = q14_val + q15_val + q16_val
-            # Check if percentages (should sum to ~100)
-            if all(v <= 100 for v in [q14_val, q15_val, q16_val] if v > 0):
-                if abs(scope_sum - 100) > 5:  # Allow 5% tolerance
+        apple_scope_vals = [q14_val, q15_val, q16_val]
+        if all(v is not None for v in apple_scope_vals):
+            apple_scope_sum = sum(v for v in apple_scope_vals)
+            
+            likely_percentages = all(v <= 100 for v in apple_scope_vals) and apple_scope_sum <= 150
+            
+            if likely_percentages:
+                variance = abs(apple_scope_sum - 100)
+                if variance > 5:
                     manual_items.append({
                         'tab': 'Emissions Baseline',
                         'question': 'Q13-Q16',
-                        'description': 'Apple scope breakdown validation',
-                        'value': f"Total: {q13_val}, Scope1: {q14_val}, Scope2: {q15_val}, Scope3: {q16_val}, Sum: {scope_sum}",
+                        'description': 'Apple scope breakdown validation (percentages)',
+                        'value': f"Q13 Total: {q13_val}, Scope1: {q14_val}%, Scope2: {q15_val}%, Scope3: {q16_val}%, Sum: {apple_scope_sum}%",
                         'current_score': 0,
                         'max_score': 0,
-                        'review_criteria': 'Scope breakdowns (Q14+Q15+Q16) should total to 100% or match Q13 total',
-                        'justification': f'Scope sum ({scope_sum}) does not equal 100% - needs review'
+                        'review_criteria': 'Apple scope percentages (Q14+Q15+Q16) should total to 100%',
+                        'justification': f'Scope sum ({apple_scope_sum:.1f}%) does not equal 100% (variance: {variance:.1f}%) - needs review',
+                        'severity': 'warning'
                     })
             else:
-                # Absolute values - should sum to Q13
-                if abs(scope_sum - q13_val) > (q13_val * 0.05):  # Allow 5% tolerance
+                variance_pct = abs(apple_scope_sum - q13_val) / q13_val * 100 if q13_val > 0 else 0
+                if variance_pct > 5:
                     manual_items.append({
                         'tab': 'Emissions Baseline',
                         'question': 'Q13-Q16',
-                        'description': 'Apple scope breakdown validation',
-                        'value': f"Total: {q13_val}, Scope1: {q14_val}, Scope2: {q15_val}, Scope3: {q16_val}, Sum: {scope_sum}",
+                        'description': 'Apple scope breakdown validation (absolute)',
+                        'value': f"Q13 Total: {q13_val:,.0f}, Scope1: {q14_val:,.0f}, Scope2: {q15_val:,.0f}, Scope3: {q16_val:,.0f}, Sum: {apple_scope_sum:,.0f}",
                         'current_score': 0,
                         'max_score': 0,
-                        'review_criteria': 'Scope breakdowns (Q14+Q15+Q16) should total to Q13',
-                        'justification': f'Scope sum ({scope_sum}) does not equal total ({q13_val}) - needs review'
+                        'review_criteria': 'Apple scope values (Q14+Q15+Q16) should total to Q13',
+                        'justification': f'Scope sum ({apple_scope_sum:,.0f}) does not equal total ({q13_val:,.0f}) - {variance_pct:.1f}% variance - needs review',
+                        'severity': 'warning'
                     })
     
+    # Apple total should not exceed Company total
+    if q13_val and q9_val and q13_val > q9_val:
+        manual_items.append({
+            'tab': 'Emissions Baseline',
+            'question': 'Q13 vs Q9',
+            'description': 'Apple vs Company total comparison',
+            'value': f"Apple total: {q13_val:,.0f}, Company total: {q9_val:,.0f}",
+            'current_score': 0,
+            'max_score': 0,
+            'review_criteria': 'Apple-specific emissions should not exceed total company emissions',
+            'justification': f'Apple emissions ({q13_val:,.0f}) exceed company total ({q9_val:,.0f}) - likely data error',
+            'severity': 'error'
+        })
+    
     return manual_items
+
+# =============================================================================
+# MAIN SCORING FUNCTIONS
+# =============================================================================
 
 def score_tab(sheets, tab_key, tab_rules, all_rules):
     tab_results = {
@@ -636,9 +1081,15 @@ def score_tab(sheets, tab_key, tab_rules, all_rules):
         else:
             score, justification = q_rules['score_func'](value)
         
-        tier = q_rules['tier']
-        weighted = score * TIER_WEIGHTS[tier]
-        max_weighted = q_rules['max_pts'] * TIER_WEIGHTS[tier]
+        tier = q_rules.get('tier')
+        is_unscored = q_rules.get('unscored', False) or tier is None
+        
+        if is_unscored:
+            weighted = 0
+            max_weighted = 0
+        else:
+            weighted = score * TIER_WEIGHTS[tier]
+            max_weighted = q_rules['max_pts'] * TIER_WEIGHTS[tier]
         
         tab_results['questions'][q_key] = {
             'description': q_rules['description'],
@@ -649,13 +1100,15 @@ def score_tab(sheets, tab_key, tab_rules, all_rules):
             'max_weighted': max_weighted,
             'justification': justification,
             'value': str(value)[:200] if value else '',
-            'manual_review': q_rules.get('manual_review', False)
+            'manual_review': q_rules.get('manual_review', False),
+            'unscored': is_unscored
         }
         
-        tab_results['raw_score'] += score
-        tab_results['weighted_score'] += weighted
-        tab_results['max_raw'] += q_rules['max_pts']
-        tab_results['max_weighted'] += max_weighted
+        if not is_unscored:
+            tab_results['raw_score'] += score
+            tab_results['weighted_score'] += weighted
+            tab_results['max_raw'] += q_rules['max_pts']
+            tab_results['max_weighted'] += max_weighted
         
         if q_rules.get('manual_review') and score > 0:
             tab_results['manual_review_items'].append({
@@ -672,6 +1125,7 @@ def score_tab(sheets, tab_key, tab_rules, all_rules):
     return tab_results
 
 def score_carrier(excel_file, carrier_name=None):
+    """Main entry point: Score a carrier's survey responses"""
     try:
         xlsx = pd.ExcelFile(excel_file)
         sheets = {s: pd.read_excel(xlsx, sheet_name=s) for s in xlsx.sheet_names}
@@ -705,7 +1159,6 @@ def score_carrier(excel_file, carrier_name=None):
         results['max_weighted'] += tab_results['max_weighted']
         results['manual_review_items'].extend(tab_results['manual_review_items'])
     
-    # Add scope validation for Emissions Baseline
     if 'tab3' in results['tabs']:
         validation_items = validate_scope_totals(
             find_sheet_for_tab(sheets, 'Emissions Baseline', 2),
@@ -718,3 +1171,33 @@ def score_carrier(excel_file, carrier_name=None):
     results['weighted_percentage'] = round(results['total_weighted'] / results['max_weighted'] * 100, 1) if results['max_weighted'] > 0 else 0
     
     return results
+
+# =============================================================================
+# CLI TEST (Optional)
+# =============================================================================
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) > 1:
+        file_path = sys.argv[1]
+        carrier = sys.argv[2] if len(sys.argv) > 2 else "Test Carrier"
+        results = score_carrier(file_path, carrier)
+        
+        if 'error' in results:
+            print(f"Error: {results['error']}")
+        else:
+            print(f"\n{'='*60}")
+            print(f"SCORECARD: {results['carrier_name']}")
+            print(f"{'='*60}")
+            print(f"Services: {results['service_type']}")
+            print(f"Raw Score: {results['total_raw']}/{results['max_raw']} ({results['raw_percentage']}%)")
+            print(f"Weighted Score: {results['total_weighted']}/{results['max_weighted']} ({results['weighted_percentage']}%)")
+            print(f"\nManual Review Items: {len(results['manual_review_items'])}")
+            
+            for tab_key, tab_data in results['tabs'].items():
+                print(f"\n--- {tab_data['name']} ---")
+                for q_key, q_data in tab_data['questions'].items():
+                    status = "[UNSCORED]" if q_data.get('unscored') else f"{q_data['raw_score']}/{q_data['max_pts']}"
+                    print(f"  {q_key}: {status} - {q_data['justification'][:50]}")
+    else:
+        print("Usage: python scoring_engine.py <excel_file> [carrier_name]")
