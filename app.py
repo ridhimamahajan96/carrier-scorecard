@@ -295,6 +295,9 @@ if st.session_state.results:
             max_score = item['max_score']
             tier = item.get('tier', 1)
             
+            # Ensure max_score is at least 1 for display purposes
+            display_max = max(max_score, 1)
+            
             curve_label = " 📊 CURVE" if is_curve else ""
             st.markdown(f"### {status_icon} {item['carrier']} | {item['tab']} - {item['question']}{curve_label}")
             
@@ -326,44 +329,57 @@ if st.session_state.results:
             st.caption(f"Review Criteria: {item['review_criteria']}")
             st.caption(f"Auto Justification: {item['justification']}")
             
-            # Simple action buttons + slider
-            st.markdown("**Set Final Score:**")
-            
-            col1, col2, col3, col4 = st.columns([1, 1, 1, 2])
-            
-            with col1:
-                if is_curve:
-                    curve_info = get_curve_score_for_carrier(item['carrier'], item['tab_key'], item['question'])
-                    curve_score = curve_info['score'] if curve_info else original_score
-                    if st.button(f"📊 Use Curve ({curve_score})", key=f"curve_{key}", use_container_width=True):
-                        st.session_state.manual_reviews[key] = {'status': 'curve_applied', 'score': curve_score, 'is_curve': True}
+            # Action buttons - only show if max_score > 0
+            if max_score > 0:
+                st.markdown("**Set Final Score:**")
+                
+                col1, col2, col3, col4 = st.columns([1, 1, 1, 2])
+                
+                with col1:
+                    if is_curve:
+                        curve_info = get_curve_score_for_carrier(item['carrier'], item['tab_key'], item['question'])
+                        curve_score = curve_info['score'] if curve_info else original_score
+                        if st.button(f"📊 Use Curve ({curve_score})", key=f"curve_{key}", use_container_width=True):
+                            st.session_state.manual_reviews[key] = {'status': 'curve_applied', 'score': curve_score, 'is_curve': True}
+                            st.rerun()
+                    else:
+                        if st.button(f"✅ Accept ({original_score})", key=f"accept_{key}", use_container_width=True):
+                            st.session_state.manual_reviews[key] = {'status': 'approved', 'score': original_score}
+                            st.rerun()
+                
+                with col2:
+                    if st.button(f"🎯 Give Max ({max_score})", key=f"max_{key}", use_container_width=True):
+                        st.session_state.manual_reviews[key] = {'status': 'manual', 'score': max_score}
                         st.rerun()
-                else:
-                    if st.button(f"✅ Accept ({original_score})", key=f"accept_{key}", use_container_width=True):
-                        st.session_state.manual_reviews[key] = {'status': 'approved', 'score': original_score}
+                
+                with col3:
+                    if st.button("❌ Give Zero", key=f"zero_{key}", use_container_width=True):
+                        st.session_state.manual_reviews[key] = {'status': 'manual', 'score': 0}
                         st.rerun()
-            
-            with col2:
-                if st.button(f"🎯 Give Max ({max_score})", key=f"max_{key}", use_container_width=True):
-                    st.session_state.manual_reviews[key] = {'status': 'manual', 'score': max_score}
-                    st.rerun()
-            
-            with col3:
-                if st.button("❌ Give Zero", key=f"zero_{key}", use_container_width=True):
-                    st.session_state.manual_reviews[key] = {'status': 'manual', 'score': 0}
-                    st.rerun()
-            
-            with col4:
-                new_score = st.slider(
-                    "Custom score:",
-                    min_value=0,
-                    max_value=max_score,
-                    value=current_score,
-                    key=f"slider_{key}"
-                )
-                if new_score != current_score:
-                    st.session_state.manual_reviews[key] = {'status': 'manual', 'score': new_score}
-                    st.rerun()
+                
+                with col4:
+                    new_score = st.slider(
+                        "Custom score:",
+                        min_value=0,
+                        max_value=max_score,
+                        value=min(current_score, max_score),
+                        key=f"slider_{key}"
+                    )
+                    if new_score != current_score:
+                        st.session_state.manual_reviews[key] = {'status': 'manual', 'score': new_score}
+                        st.rerun()
+            else:
+                # Validation item with no score
+                st.warning("⚠️ This is a validation check - review the data discrepancy above")
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("✅ Acknowledge", key=f"ack_{key}", use_container_width=True):
+                        st.session_state.manual_reviews[key] = {'status': 'approved', 'score': 0}
+                        st.rerun()
+                with col2:
+                    if st.button("🚩 Flag Issue", key=f"flag_{key}", use_container_width=True):
+                        st.session_state.manual_reviews[key] = {'status': 'flagged', 'score': 0}
+                        st.rerun()
             
             if current_status != 'pending':
                 if st.button("↩️ Reset to Pending", key=f"reset_{key}"):
